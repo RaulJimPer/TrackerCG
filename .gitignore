@@ -15,7 +15,7 @@ env/
 .vscode/
 .DS_Store
 
-# OpenCode AI Manifests (Private Local Configuration)
+# OpenCode AI Configuration
 .opencode/
-agents.md
-design.md
+skills-lock.json
+opencode.json
