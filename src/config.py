@@ -24,6 +24,9 @@ class Settings:
         )
     )
     base_dir: Path = field(default_factory=lambda: Path(__file__).resolve().parent.parent)
+    pokemon_tcg_api_key: str = field(
+        default_factory=lambda: os.getenv("POKEMON_TCG_API_KEY", "trackercg-dev")
+    )
 
 
 settings = Settings()

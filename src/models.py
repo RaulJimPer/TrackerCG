@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from sqlalchemy import JSON, Column, Enum as SAEnum, String
@@ -62,7 +62,7 @@ class Card(SQLModel, table=True):
     rarity: str = Field(default="Common")
     image_url: str = Field(default="")
     market_price: float = Field(default=0.0, ge=0)
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     game_metadata: dict = Field(default={}, sa_column=Column(JSON))
 
 
@@ -80,4 +80,4 @@ class UserCard(SQLModel, table=True):
     is_foil: bool = Field(default=False)
     language: str = Field(default="EN", max_length=10)
     purchase_price: float | None = Field(default=None)
-    added_at: datetime = Field(default_factory=datetime.utcnow)
+    added_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
