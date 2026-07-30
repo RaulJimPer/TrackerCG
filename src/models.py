@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from sqlalchemy import JSON, Column, Enum as SAEnum, String
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, SQLModel
 
 
 class Game(str, Enum):
@@ -41,7 +40,7 @@ class Condition(str, Enum):
 class User(SQLModel, table=True):
     __tablename__ = "user"
 
-    id: int = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     email: str = Field(
         sa_column=Column(String(320), unique=True, index=True, nullable=False)
     )
@@ -50,13 +49,11 @@ class User(SQLModel, table=True):
     is_superuser: bool = Field(default=False, nullable=False)
     is_verified: bool = Field(default=False, nullable=False)
 
-    collection: list["UserCard"] = Relationship(back_populates="user")
-
 
 class Card(SQLModel, table=True):
     __tablename__ = "card"
 
-    id: int = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     game: Game = Field(sa_column=Column(SAEnum(Game), nullable=False, index=True))
     name: str = Field(index=True)
     set_name: str
@@ -68,13 +65,11 @@ class Card(SQLModel, table=True):
     last_updated: datetime = Field(default_factory=datetime.utcnow)
     game_metadata: dict = Field(default={}, sa_column=Column(JSON))
 
-    user_cards: list["UserCard"] = Relationship(back_populates="card")
-
 
 class UserCard(SQLModel, table=True):
     __tablename__ = "usercard"
 
-    id: int = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", nullable=False)
     card_id: int = Field(foreign_key="card.id", nullable=False)
     quantity: int = Field(default=1, ge=1)
@@ -84,8 +79,5 @@ class UserCard(SQLModel, table=True):
     )
     is_foil: bool = Field(default=False)
     language: str = Field(default="EN", max_length=10)
-    purchase_price: Optional[float] = Field(default=None)
+    purchase_price: float | None = Field(default=None)
     added_at: datetime = Field(default_factory=datetime.utcnow)
-
-    user: User = Relationship(back_populates="collection")
-    card: Card = Relationship(back_populates="user_cards")
