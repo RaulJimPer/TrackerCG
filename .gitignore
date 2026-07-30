@@ -1,0 +1,21 @@
+# Python Environments
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# IDEs & OS Files
+.vscode/
+.DS_Store
+
+# OpenCode AI Manifests (Private Local Configuration)
+.opencode/
+agents.md
+design.md
