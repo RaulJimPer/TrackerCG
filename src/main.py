@@ -5,8 +5,9 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from . import models  # noqa: F401 - register tables in SQLModel.metadata
 from .config import settings
-from .database import create_db_and_tables, engine
+from .database import async_engine, create_db_and_tables
 
 BASE_DIR = settings.base_dir
 STATIC_DIR = BASE_DIR / "static"
@@ -17,9 +18,9 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    create_db_and_tables()
+    await create_db_and_tables()
     yield
-    engine.dispose()
+    await async_engine.dispose()
 
 
 app = FastAPI(
