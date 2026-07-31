@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import math
 from decimal import Decimal
 
@@ -14,10 +15,12 @@ from src.schemas.collection import (
     CollectionAddRequest,
     CollectionItemResponse,
     CollectionListResult,
+    CollectionSplitRequest,
     CollectionUpdateRequest,
     PortfolioValueResponse,
 )
 from src.schemas.cards import CardResponse
+from src.scraper import SCRAPERS, refresh_stale_prices
 
 router = APIRouter(prefix="/api/collection", tags=["collection"])
 
@@ -86,6 +89,23 @@ async def list_collection(
         page_size=page_size,
         pages=_pages(total, page_size),
     )
+
+
+@router.get("/games", response_model=list[str])
+async def collection_games(
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_user),
+):
+    """Distinct games present in the current user's collection."""
+    stmt = (
+        select(func.distinct(Card.game))
+        .select_from(UserCard)
+        .join(Card, UserCard.card_id == Card.id)
+        .where(UserCard.user_id == user.id)
+        .order_by(Card.game)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
 
 
 @router.get("/value", response_model=PortfolioValueResponse)
@@ -174,6 +194,73 @@ async def add_to_collection(
         await db.refresh(uc)
 
     return _item_response(uc, card)
+
+
+@router.post("/refresh-prices", status_code=202)
+async def refresh_collection_prices(
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_user),
+):
+    """Trigger a background market-price refresh of stale cards. Returns
+    immediately (202); actual scraping runs in the background."""
+    games_stmt = (
+        select(func.distinct(Card.game))
+        .select_from(UserCard)
+        .join(Card, UserCard.card_id == Card.id)
+        .where(UserCard.user_id == user.id)
+    )
+    result = await db.execute(games_stmt)
+    game_values = [g for g in result.scalars().all() if g is not None]
+    games = [g for g in game_values if Game(g) in SCRAPERS]
+
+    asyncio.ensure_future(refresh_stale_prices())
+    return {"status": "scheduled", "games": games}
+
+
+@router.post("/{item_id}/split", response_model=CollectionItemResponse, status_code=201)
+async def split_collection_item(
+    item_id: int,
+    body: CollectionSplitRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_user),
+):
+    """Split one copy off a grouped collection item into its own item."""
+    stmt = select(UserCard).where(
+        UserCard.id == item_id,
+        UserCard.user_id == user.id,
+    )
+    result = await db.execute(stmt)
+    uc = result.scalar_one_or_none()
+    if uc is None:
+        raise HTTPException(status_code=404, detail="Collection item not found")
+
+    if uc.quantity <= body.quantity:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot split: item has only {uc.quantity} copy(-ies)",
+        )
+
+    card_stmt = select(Card).where(Card.id == uc.card_id)
+    card_result = await db.execute(card_stmt)
+    card = card_result.scalar_one()
+
+    new_uc = UserCard(
+        user_id=user.id,
+        card_id=uc.card_id,
+        quantity=body.quantity,
+        condition=body.condition,
+        is_foil=body.is_foil,
+        language=body.language,
+        purchase_price=body.purchase_price,
+    )
+    uc.quantity -= body.quantity
+    if body.purchase_price is not None:
+        uc.purchase_price = body.purchase_price
+
+    db.add(new_uc)
+    await db.commit()
+    await db.refresh(new_uc)
+    return _item_response(new_uc, card)
 
 
 @router.patch("/{item_id}", response_model=CollectionItemResponse)

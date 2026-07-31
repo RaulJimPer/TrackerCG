@@ -9,7 +9,7 @@ from src.database import get_async_session
 from src.models import Card, Game, User
 from src.rate_limit import limiter
 from src.schemas.cards import CardResponse, CardSearchResult, PriceRefreshResponse
-from src.scraper import SCRAPERS, refresh_card_price, search_cards
+from src.scraper import refresh_card_price, search_cards
 
 router = APIRouter(prefix="/api/cards", tags=["cards"])
 
@@ -51,12 +51,6 @@ async def _search_external(
     page: int,
     page_size: int,
 ) -> CardSearchResult:
-    if game is not None and game not in SCRAPERS:
-        raise HTTPException(
-            status_code=422,
-            detail=f"No scraper configured for game: {game}",
-        )
-
     cards = await search_cards(db, game, query)
 
     total = len(cards)

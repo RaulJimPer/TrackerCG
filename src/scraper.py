@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import random
 import sys
 import threading
 from datetime import datetime, timedelta, timezone
@@ -35,6 +36,7 @@ PRICE_TTL_HOURS = 24
 _instances: dict[Game, ScraperBase] = {}
 _instances_lock = threading.Lock()
 _in_flight: dict[tuple[str, str], asyncio.Future[None]] = {}
+_background_tasks: set[asyncio.Task] = set()
 
 
 def _utcnow() -> datetime:
@@ -121,7 +123,11 @@ async def upsert_card(db: AsyncSession, data: CardData) -> Card:
 async def _search_game_external(game: Game, query: str) -> None:
     """Scrape one game's source and upsert results in its own session.
     Failures degrade to local-only."""
-    scraper = get_scraper(game)
+    try:
+        scraper = get_scraper(game)
+    except Exception:
+        logger.warning("No scraper available for %s; skipping external search", game.value)
+        return
     try:
         data = await scraper.search(query)
     except Exception:
@@ -145,14 +151,57 @@ async def _local_matches(db: AsyncSession, game: Game | None, query: str) -> lis
     return list(result.scalars().all())
 
 
+def _search_key(game: Game | None, query: str) -> tuple[str, str]:
+    return (game.value if game is not None else "*", query.strip().lower())
+
+
+async def _refresh_external(games: list[Game], query: str) -> None:
+    await asyncio.gather(
+        *(_search_game_external(g, query) for g in games),
+        return_exceptions=True,
+    )
+
+
+async def _run_single_flight(key: tuple[str, str], games: list[Game], query: str) -> None:
+    """Run an external refresh guarded by the single-flight map."""
+    task = asyncio.ensure_future(_refresh_external(games, query))
+    _in_flight[key] = task
+    try:
+        await task
+    finally:
+        _in_flight.pop(key, None)
+
+
+def _spawn_background(games: list[Game], query: str) -> None:
+    """Fire-and-forget external refresh. Never blocks or raises."""
+    games = [g for g in games if g in SCRAPERS]
+    if not games:
+        return
+
+    async def _run() -> None:
+        try:
+            await _refresh_external(games, query)
+        except Exception:
+            logger.exception("Background refresh failed (query=%r)", query)
+
+    task = asyncio.ensure_future(_run())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
 async def search_cards(
     db: AsyncSession,
     game: Game | None,
     query: str,
 ) -> list[Card]:
-    """Cache-first search. Fresh local results are served immediately; stale or
-    missing results trigger a single-flight external fetch across the requested
-    games (all supported games when ``game`` is None)."""
+    """Cache-first search.
+
+    Local matches are returned immediately, even when stale, so the user never
+    waits for scraping. If the local results are stale (older than the TTL) or
+    empty, an external refresh is triggered in the background (single-flight per
+    (game, query)). Only when there are no local matches at all do we wait for
+    the background refresh so newly-scraped cards can be returned.
+    """
     local = await _local_matches(db, game, query)
     now = _utcnow()
     ttl = timedelta(hours=PRICE_TTL_HOURS)
@@ -161,27 +210,66 @@ async def search_cards(
     if fresh:
         return fresh[:50]
 
-    key = (game.value if game is not None else "*", query.strip().lower())
-    in_progress = _in_flight.get(key)
-    if in_progress is None:
-        games = list(SCRAPERS) if game is None else [game]
+    key = _search_key(game, query)
+    games = [g for g in (list(SCRAPERS) if game is None else [game]) if g in SCRAPERS]
 
-        async def _run() -> None:
-            await asyncio.gather(
-                *(_search_game_external(g, query) for g in games),
-                return_exceptions=True,
-            )
+    if local:
+        _spawn_background(games, query)
+        return local[:50]
 
-        task = asyncio.ensure_future(_run())
-        _in_flight[key] = task
-        try:
-            await task
-        finally:
-            _in_flight.pop(key, None)
+    if not games:
+        return []
+
+    if key not in _in_flight:
+        await _run_single_flight(key, games, query)
     else:
-        await in_progress
+        await _in_flight[key]
 
     return (await _local_matches(db, game, query))[:50]
+
+
+async def refresh_stale_prices(limit: int = 25) -> int:
+    """Refresh market prices of stale cards (older than TTL) in the background.
+
+    Only touches cards whose game has a registered scraper. Returns the number
+    of cards successfully refreshed. One AsyncSession per card, random 1-3s
+    delay between requests to be kind to upstream sources.
+    """
+    cutoff = _utcnow() - timedelta(hours=PRICE_TTL_HOURS)
+    async with async_session_maker() as db:
+        stmt = (
+            select(Card)
+            .where(Card.last_updated < cutoff)
+            .order_by(Card.last_updated)
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        cards = list(result.scalars().all())
+
+    refreshed = 0
+    for card in cards:
+        if card.game not in SCRAPERS:
+            continue
+        try:
+            async with async_session_maker() as db:
+                fresh_card = await db.get(Card, card.id)
+                if fresh_card is None:
+                    continue
+                price = await get_scraper(fresh_card.game).get_price(
+                    fresh_card.external_id or f"{fresh_card.set_code}/{fresh_card.collector_number}"
+                )
+                if price is not None and price > 0:
+                    fresh_card.market_price = price
+                    fresh_card.last_updated = _utcnow()
+                    await db.commit()
+                    refreshed += 1
+        except Exception:
+            logger.exception("Stale price refresh failed for card %s", card.id)
+        await asyncio.sleep(random.uniform(1, 3))
+
+    if refreshed:
+        logger.info("Refreshed prices for %d stale card(s)", refreshed)
+    return refreshed
 
 
 async def refresh_card_price(db: AsyncSession, card: Card) -> Decimal:
