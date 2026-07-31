@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 
 from src.models import Game
-from src.scrapers.base import CardData, ScraperBase, random_sleep
+from src.scrapers.base import CardData, ScraperBase, random_sleep, to_decimal
 
 SCRYFALL_SEARCH = "https://api.scryfall.com/cards/search"
 SCRYFALL_NAMED = "https://api.scryfall.com/cards/named"
@@ -16,9 +17,11 @@ class MtgScraper(ScraperBase):
     async def search(self, query: str) -> list[CardData]:
         await random_sleep(0.5, 1.5)
         results: list[CardData] = []
-        url = f"{SCRYFALL_SEARCH}?q={query}&order=relevance&unique=prints"
 
-        resp = await self._client.get(url)
+        resp = await self._client.get(
+            SCRYFALL_SEARCH,
+            params={"q": query, "order": "relevance", "unique": "prints"},
+        )
         if resp.status_code == 404:
             return results
         resp.raise_for_status()
@@ -29,20 +32,19 @@ class MtgScraper(ScraperBase):
 
         return results
 
-    async def get_price(self, card_id: str) -> float | None:
+    async def get_price(self, external_id: str) -> Decimal | None:
         await random_sleep(0.3, 1.0)
-        url = f"https://api.scryfall.com/cards/{card_id}"
-        resp = await self._client.get(url)
+        resp = await self._client.get(f"https://api.scryfall.com/cards/{external_id}")
         if resp.status_code != 200:
             return None
         body: dict[str, Any] = resp.json()
         prices: dict[str, str | None] = body.get("prices", {})
         usd = prices.get("usd")
         if usd:
-            return float(usd)
+            return to_decimal(usd)
         usd_foil = prices.get("usd_foil")
         if usd_foil:
-            return float(usd_foil)
+            return to_decimal(usd_foil)
         return None
 
     @staticmethod
@@ -55,13 +57,14 @@ class MtgScraper(ScraperBase):
             set_name=card.get("set_name", ""),
             set_code=card.get("set", "").upper(),
             collector_number=card.get("collector_number", ""),
+            external_id=card.get("id", ""),
             rarity=card.get("rarity", "common").capitalize(),
             image_url=(
                 card.get("image_uris", {}).get("normal", "")
                 or card.get("card_faces", [{}])[0].get("image_uris", {}).get("normal", "")
             ),
-            market_price=float(usd) if usd else 0.0,
-            last_updated=datetime.now(timezone.utc).replace(tzinfo=None),
+            market_price=to_decimal(usd),
+            last_updated=datetime.now(timezone.utc),
             game_metadata={
                 "oracle_id": card.get("oracle_id"),
                 "mana_cost": card.get("mana_cost", ""),

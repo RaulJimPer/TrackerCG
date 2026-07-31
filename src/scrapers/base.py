@@ -5,6 +5,7 @@ import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from bs4 import BeautifulSoup
@@ -24,6 +25,18 @@ USER_AGENTS = [
 ]
 
 
+def to_decimal(value: Any, default: Decimal = Decimal("0")) -> Decimal:
+    """Best-effort conversion of scraped price strings/numbers to Decimal."""
+    if value is None or value == "":
+        return default
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return default
+
+
 @dataclass
 class CardData:
     game: Game
@@ -31,10 +44,11 @@ class CardData:
     set_name: str
     set_code: str
     collector_number: str
+    external_id: str = ""
     rarity: str = "Common"
     image_url: str = ""
-    market_price: float = 0.0
-    last_updated: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    market_price: Decimal = Decimal("0")
+    last_updated: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     game_metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -61,7 +75,7 @@ class ScraperBase(ABC):
         ...
 
     @abstractmethod
-    async def get_price(self, card_id: str) -> float | None:
+    async def get_price(self, card_id: str) -> Decimal | None:
         ...
 
     async def close(self) -> None:

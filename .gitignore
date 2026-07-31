@@ -5,15 +5,28 @@ __pycache__/
 venv/
 env/
 .env
+.env.*
 
 # Database
 *.sqlite
 *.sqlite3
 *.db
 
+# Local project specs (not for public repo)
+features.md
+tech_stack.md
+
+# Logs & caches
+*.log
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
 # IDEs & OS Files
 .vscode/
+.idea/
 .DS_Store
+Thumbs.db
 
 # OpenCode AI Configuration
 .opencode/

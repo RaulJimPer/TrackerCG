@@ -1,11 +1,11 @@
-from typing import AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, Optional
 
 from fastapi import Depends
 from fastapi_users import BaseUserManager, FastAPIUsers, IntegerIDMixin
 from fastapi_users.exceptions import InvalidPasswordException
 from fastapi_users.authentication import (
     AuthenticationBackend,
-    BearerTransport,
+    CookieTransport,
     JWTStrategy,
 )
 from fastapi_users.db.base import BaseUserDatabase
@@ -33,7 +33,7 @@ class UserDatabase(BaseUserDatabase[User, USER_ID]):
         return result.scalar_one_or_none()
 
     async def get_by_oauth_account(
-        self, oauth_account: str
+        self, oauth: str, account_id: str
     ) -> Optional[User]:
         raise NotImplementedError("OAuth not yet supported")
 
@@ -57,12 +57,12 @@ class UserDatabase(BaseUserDatabase[User, USER_ID]):
         await self.session.commit()
 
     async def add_oauth_account(
-        self, user: User, oauth_account: dict
+        self, user: User, create_dict: dict
     ) -> User:
         raise NotImplementedError("OAuth not yet supported")
 
     async def update_oauth_account(
-        self, user: User, oauth_account: dict
+        self, user: User, oauth_account: Any, update_dict: dict
     ) -> User:
         raise NotImplementedError("OAuth not yet supported")
 
@@ -73,7 +73,13 @@ async def get_user_db(
     yield UserDatabase(session)
 
 
-bearer_transport = BearerTransport(tokenUrl="auth/login")
+cookie_transport = CookieTransport(
+    cookie_name="trackercg_session",
+    cookie_max_age=settings.jwt_lifetime_seconds,
+    cookie_secure=settings.cookie_secure,
+    cookie_httponly=True,
+    cookie_samesite="strict",
+)
 
 
 def get_jwt_strategy() -> JWTStrategy:
@@ -85,7 +91,7 @@ def get_jwt_strategy() -> JWTStrategy:
 
 auth_backend = AuthenticationBackend(
     name="jwt",
-    transport=bearer_transport,
+    transport=cookie_transport,
     get_strategy=get_jwt_strategy,
 )
 

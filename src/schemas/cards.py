@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -27,7 +28,7 @@ class CardResponse(BaseModel):
     collector_number: str
     rarity: str
     image_url: str
-    market_price: float
+    market_price: Decimal
     last_updated: datetime
     game_metadata: dict[str, Any]
 
@@ -40,3 +41,8 @@ class CardSearchResult(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+class PriceRefreshResponse(BaseModel):
+    card_id: int
+    market_price: Decimal

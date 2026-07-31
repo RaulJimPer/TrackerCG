@@ -1,29 +1,39 @@
-from __future__ import annotations
-
 import math
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.auth import current_user
 from src.database import get_async_session
-from src.models import Card, Game
-from src.schemas.cards import CardResponse, CardSearchResult
-from src.scraper import refresh_card_price, search_cards
+from src.models import Card, Game, User
+from src.rate_limit import limiter
+from src.schemas.cards import CardResponse, CardSearchResult, PriceRefreshResponse
+from src.scraper import SCRAPERS, refresh_card_price, search_cards
 
 router = APIRouter(prefix="/api/cards", tags=["cards"])
 
 
+def _pages(total: int, page_size: int) -> int:
+    if total == 0:
+        return 0
+    return math.ceil(total / page_size)
+
+
 @router.get("/search", response_model=CardSearchResult)
+@limiter.limit("30/minute")
 async def api_search_cards(
-    q: str = Query("", description="Generic search query"),
+    request: Request,
+    response: Response,
+    q: str = Query("", max_length=200, description="Generic search query"),
     game: Game | None = Query(None, description="Filter by game"),
-    name: str = Query("", description="Search by card name"),
-    set_name: str = Query("", description="Search by set name"),
-    collector_number: str = Query("", description="Search by collector number"),
+    name: str = Query("", max_length=200, description="Search by card name"),
+    set_name: str = Query("", max_length=200, description="Search by set name"),
+    collector_number: str = Query("", max_length=100, description="Search by collector number"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_user),
 ):
     query = q or name or set_name or collector_number
     game_enum: Game | None = game
@@ -41,13 +51,15 @@ async def _search_external(
     page: int,
     page_size: int,
 ) -> CardSearchResult:
-    if game is None:
-        return CardSearchResult(items=[], total=0, page=page, page_size=page_size, pages=0)
+    if game is not None and game not in SCRAPERS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No scraper configured for game: {game}",
+        )
 
     cards = await search_cards(db, game, query)
 
     total = len(cards)
-    pages = max(1, math.ceil(total / page_size))
     start = (page - 1) * page_size
     end = start + page_size
     page_items = [CardResponse.model_validate(c) for c in cards[start:end]]
@@ -57,7 +69,7 @@ async def _search_external(
         total=total,
         page=page,
         page_size=page_size,
-        pages=pages,
+        pages=_pages(total, page_size),
     )
 
 
@@ -88,9 +100,12 @@ async def _search_local(
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total_result = await db.execute(count_stmt)
     total = total_result.scalar() or 0
-    pages = max(1, math.ceil(total / page_size))
 
-    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+    stmt = (
+        stmt.order_by(Card.game, Card.name, Card.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     result = await db.execute(stmt)
     cards = list(result.scalars().all())
 
@@ -99,7 +114,7 @@ async def _search_local(
         total=total,
         page=page,
         page_size=page_size,
-        pages=pages,
+        pages=_pages(total, page_size),
     )
 
 
@@ -108,21 +123,23 @@ async def api_get_card(
     card_id: int,
     db: AsyncSession = Depends(get_async_session),
 ):
-    stmt = select(Card).where(Card.id == card_id)
-    result = await db.execute(stmt)
-    card = result.scalar_one_or_none()
+    card = await db.get(Card, card_id)
+    if card is None:
+        raise HTTPException(status_code=404, detail="Card not found")
     return CardResponse.model_validate(card)
 
 
-@router.post("/{card_id}/refresh-price")
+@router.post("/{card_id}/refresh-price", response_model=PriceRefreshResponse)
+@limiter.limit("20/minute")
 async def api_refresh_price(
+    request: Request,
+    response: Response,
     card_id: int,
     db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_user),
 ):
-    stmt = select(Card).where(Card.id == card_id)
-    result = await db.execute(stmt)
-    card = result.scalar_one_or_none()
+    card = await db.get(Card, card_id)
     if card is None:
-        return {"error": "Card not found"}
+        raise HTTPException(status_code=404, detail="Card not found")
     price = await refresh_card_price(db, card)
-    return {"card_id": card_id, "market_price": price}
+    return PriceRefreshResponse(card_id=card_id, market_price=price)
