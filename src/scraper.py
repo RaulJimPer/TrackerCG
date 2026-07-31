@@ -4,6 +4,9 @@ import argparse
 import asyncio
 import sys
 from datetime import datetime, timedelta, timezone
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 from typing import Any
 
 from sqlalchemy import select
