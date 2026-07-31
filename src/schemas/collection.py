@@ -26,6 +26,14 @@ class CollectionUpdateRequest(BaseModel):
     purchase_price: Decimal | None = Field(default=None, ge=0)
 
 
+class CollectionSplitRequest(BaseModel):
+    quantity: int = Field(default=1, ge=1)
+    condition: Condition = Condition.NEAR_MINT
+    is_foil: bool = False
+    language: str = Field(default="EN", max_length=10)
+    purchase_price: Decimal | None = Field(default=None, ge=0)
+
+
 class CollectionItemResponse(BaseModel):
     id: int
     user_id: int

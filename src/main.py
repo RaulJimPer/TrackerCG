@@ -1,10 +1,10 @@
+import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 if sys.platform == "win32":
-    import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from fastapi import Depends, FastAPI, Request, Response
@@ -23,7 +23,9 @@ from .database import async_engine, create_db_and_tables
 from .rate_limit import limiter
 from .routes.cards import router as cards_router
 from .routes.collection import router as collection_router
-from .scraper import close_scrapers
+from .scraper import close_scrapers, refresh_stale_prices
+
+PRICE_REFRESH_INTERVAL_HOURS = 24
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -46,9 +48,28 @@ AUTH_REGISTER_LIMIT = "5/minute"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_db_and_tables()
-    yield
-    await close_scrapers()
-    await async_engine.dispose()
+
+    async def _periodic_refresh() -> None:
+        """Refresh stale card prices every 24h while the app runs."""
+        while True:
+            await asyncio.sleep(PRICE_REFRESH_INTERVAL_HOURS * 3600)
+            try:
+                await refresh_stale_prices()
+            except Exception:
+                logging.getLogger(__name__).exception("Periodic price refresh failed")
+
+    refresh_task = asyncio.create_task(_periodic_refresh())
+
+    try:
+        yield
+    finally:
+        refresh_task.cancel()
+        try:
+            await refresh_task
+        except asyncio.CancelledError:
+            pass
+        await close_scrapers()
+        await async_engine.dispose()
 
 
 app = FastAPI(
