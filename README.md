@@ -1,20 +1,99 @@
 # TrackerCG
 
-TrackerCG is a fullstack web application designed for managing personal Trading Card Game (TCG) collections, supporting games like Magic: The Gathering, Yu-Gi-Oh!, and Pokémon. 
+A fullstack web application for managing personal Trading Card Game (TCG)
+collections — Magic: The Gathering, Pokémon, Yu-Gi-Oh!, Lorcana, One Piece,
+Digimon, and more. TrackerCG automatically pulls real-time market values from
+external sources and computes the total value of your inventory through a
+clean, dark-themed interface.
 
-The system automatically extracts real-time market values from external sources to calculate the total value of the user's inventory through a simplified graphical interface.
+> **Documentation is organized in [`docs/`](docs/)** — this README is the entry
+> point; each topic has a dedicated page with full detail.
 
-## Core Features
+## Highlights
 
-- **Automated Data Extraction:** Web scraping and consolidation of market data.
-- **Inventory Management:** Web dashboard to search, view, and register new cards into the local inventory.
-- **Dynamic Valuation:** Calculates the total value of the deck or collection based on current market prices.
-- **Persistent Storage:** Local catalog system for the user's collection.
+- **Secure accounts** — registration, login, and sessions via
+  [fastapi-users](https://fastapi-users.github.io/fastapi-users/) with JWT in
+  an HTTP-only cookie, Argon2 password hashing, and a strict password policy.
+- **Portfolio dashboard** — total value hero, responsive card grid, per-game
+  filter pills, pagination, card details, and in-place editing.
+- **Global card search** — cache-first local results returned immediately,
+  with background scraping from Scryfall (MTG), the Pokémon TCG API, and
+  TCGplayer (Yu-Gi-Oh!).
+- **Automated valuation** — 24 h price TTL, single-flight refreshes, a
+  periodic refresh task, and per-card refresh — all priced with exact
+  `Decimal` arithmetic.
+- **Accessible SPA** — vanilla JavaScript, ES/EN localization, keyboard
+  navigation, focus-trapped modals, and zero build tooling.
 
-## Tech Stack
+## Quickstart
 
-- **Backend & API:** Python, FastAPI
-- **Data Extraction (Scraping):** BeautifulSoup4, Playwright
-- **Database:** SQLite managed via SQLModel
-- **Frontend:** HTML5, CSS3, Vanilla JavaScript, Jinja2 Templates
-- **Styling:** Tailwind CSS (via CDN)
+```powershell
+# 1. Create and activate a virtual environment
+python -m venv venv
+.\venv\Scripts\Activate.ps1          # Windows
+# source venv/bin/activate           # macOS / Linux
+
+# 2. Install dependencies (+ Playwright browser for Yu-Gi-Oh! scraping)
+pip install -r requirements.txt
+pip install -r requirements-dev.txt  # optional: dev/testing
+playwright install chromium
+
+# 3. Configure (optional but recommended)
+#    copy .env.example to .env and adjust SECRET_KEY / DEBUG / etc.
+
+# 4. Apply migrations (the schema also auto-creates on first startup)
+alembic upgrade head
+
+# 5. Run
+uvicorn src.main:app --reload
+```
+
+Then open <http://127.0.0.1:8000>. Full setup, configuration, and usage
+details are in the **[Deployment Guide](docs/deployment.md)**.
+
+## Documentation
+
+| Page | Contents |
+|------|----------|
+| [Features](docs/features.md) | Authentication, dashboard, search, price automation, data model, i18n |
+| [Architecture](docs/architecture.md) | Repository tree, backend layering, frontend SPA, migrations, conventions |
+| [Tech Stack](docs/tech-stack.md) | Every technology, version, and the rationale behind it |
+| [UI/UX Design](docs/ui-ux-design.md) | Palette, typography, components, states, accessibility |
+| [Deployment](docs/deployment.md) | Install, configure, run, use, and production notes |
+| [Testing](docs/testing.md) | How to run the tests and what the suite covers |
+
+## Testing at a glance
+
+- **47 pytest API tests** (`test/`) — auth, collection CRUD/merge/split,
+  search, security headers, rate limits — each on a fresh temporary database
+  with external scraping neutralized.
+- **Playwright smoke test** (`test/smoke_test.py`) — 37 end-to-end checks of
+  the real UI (fixes, pagination, accessibility, i18n, console hygiene).
+
+```powershell
+venv\Scripts\python.exe -m pytest test -q
+venv\Scripts\python.exe -m ruff check src test alembic
+venv\Scripts\python.exe test\smoke_test.py   # requires the server on :8000
+```
+
+See the **[Testing Plan](docs/testing.md)** for details.
+
+## Tech stack (summary)
+
+- **Backend:** Python · FastAPI · SQLModel/SQLAlchemy (async) · SQLite
+  (aiosqlite) · Alembic · fastapi-users · pwdlib/Argon2 · slowapi · Uvicorn
+- **Scraping:** httpx · BeautifulSoup4 · Playwright (Yu-Gi-Oh! only)
+- **Frontend:** HTML5 · CSS3 · Vanilla JS · Jinja2 · Tailwind CSS (CDN) · Inter
+- **Dev/QA:** pytest · pytest-asyncio · ruff · Playwright
+
+## License
+
+This project is licensed under the **PolyForm Noncommercial License 1.0.0**.
+You are free to use, modify, and distribute this software for personal, educational, and non-commercial purposes. Commercial use or monetization of this project or its variants is strictly prohibited. See the [LICENSE](LICENSE) file for details.
+
+## Warning notice
+> **Status: in development.** TrackerCG is an active work-in-progress and
+> does **not** yet support every TCG on the market. Only Magic: The Gathering,
+> Pokémon, and Yu-Gi-Oh! have automated market-data scraping for now; other games
+> (Lorcana, One Piece, Digimon, ...) are searchable from the local catalog but
+> lack live price updates. Features and behavior may change at any time.
