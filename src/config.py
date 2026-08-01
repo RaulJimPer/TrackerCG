@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     pokemon_tcg_api_key: str = ""
     cookie_secure: bool = False
     rate_limit_enabled: bool = True
+    trusted_proxy: bool = False
     base_dir: Path = Path(__file__).resolve().parent.parent
 
     @property

@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlmodel import SQLModel
 
 from src import models  # noqa: F401 - register tables in SQLModel.metadata
-from src.config import settings
 from src.database import ASYNC_DATABASE_URL
 
 config = context.config
@@ -56,6 +55,12 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        # AUTOCOMMIT: prevents the PRAGMA foreign_keys=OFF (or any other
+        # statement) from leaving an implicit root transaction open on the
+        # connection. SQLite has transactional_ddl=False, so alembic never
+        # issues its own COMMIT; an open transaction would be rolled back on
+        # connection close, silently discarding every migration.
+        isolation_level="AUTOCOMMIT",
     )
 
     async with connectable.connect() as connection:

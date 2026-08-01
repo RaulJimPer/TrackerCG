@@ -2,7 +2,6 @@ import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -24,6 +23,7 @@ from .rate_limit import limiter
 from .routes.cards import router as cards_router
 from .routes.collection import router as collection_router
 from .scraper import close_scrapers, refresh_stale_prices
+from .security import SecurityHeadersMiddleware
 
 PRICE_REFRESH_INTERVAL_HOURS = 24
 
@@ -80,14 +80,19 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    return JSONResponse(
+    response = JSONResponse(
         status_code=429,
         content={"detail": "Rate limit exceeded. Please retry later."},
     )
+    amount = getattr(getattr(exc.limit, "limit", None), "amount", None)
+    response.headers["X-RateLimit-Limit"] = str(amount) if amount is not None else "0"
+    response.headers["X-RateLimit-Remaining"] = "0"
+    return response
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

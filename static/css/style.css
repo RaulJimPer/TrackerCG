@@ -198,6 +198,10 @@ input[type="number"] {
 .modal-visible {
   opacity: 1;
 }
+/* Lock background scroll while a modal dialog is open (a11y). */
+.modal-open-body {
+  overflow: hidden;
+}
 
 /* ---------- Toast ---------- */
 .toast {

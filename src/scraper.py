@@ -8,7 +8,6 @@ import sys
 import threading
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -196,30 +195,29 @@ async def search_cards(
 ) -> list[Card]:
     """Cache-first search.
 
-    Local matches are returned immediately, even when stale, so the user never
-    waits for scraping. If the local results are stale (older than the TTL) or
-    empty, an external refresh is triggered in the background (single-flight per
-    (game, query)). Only when there are no local matches at all do we wait for
-    the background refresh so newly-scraped cards can be returned.
+    Every local match is returned immediately — fresh or stale — so the user
+    never waits for scraping and games without a scraper (Lorcana, Digimon,
+    One Piece) stay visible. An external refresh is only spawned when nothing
+    local is fresh, and only when there are no local matches at all do we wait
+    for the single-flight background refresh so newly-scraped cards can be
+    returned.
     """
     local = await _local_matches(db, game, query)
     now = _utcnow()
     ttl = timedelta(hours=PRICE_TTL_HOURS)
     fresh = [c for c in local if c.last_updated >= now - ttl]
 
-    if fresh:
-        return fresh[:50]
-
-    key = _search_key(game, query)
-    games = [g for g in (list(SCRAPERS) if game is None else [game]) if g in SCRAPERS]
-
     if local:
-        _spawn_background(games, query)
+        if not fresh:
+            games = [g for g in (list(SCRAPERS) if game is None else [game]) if g in SCRAPERS]
+            _spawn_background(games, query)
         return local[:50]
 
+    games = [g for g in (list(SCRAPERS) if game is None else [game]) if g in SCRAPERS]
     if not games:
         return []
 
+    key = _search_key(game, query)
     if key not in _in_flight:
         await _run_single_flight(key, games, query)
     else:
@@ -273,6 +271,8 @@ async def refresh_stale_prices(limit: int = 25) -> int:
 
 
 async def refresh_card_price(db: AsyncSession, card: Card) -> Decimal:
+    if card.game not in SCRAPERS:
+        return card.market_price
     scraper = get_scraper(card.game)
     ref = card.external_id or f"{card.set_code}/{card.collector_number}"
     try:

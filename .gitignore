@@ -12,10 +12,6 @@ env/
 *.sqlite3
 *.db
 
-# Local project specs (not for public repo)
-features.md
-tech_stack.md
-
 # Logs & caches
 *.log
 .pytest_cache/

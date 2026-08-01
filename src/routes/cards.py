@@ -9,7 +9,7 @@ from src.database import get_async_session
 from src.models import Card, Game, User
 from src.rate_limit import limiter
 from src.schemas.cards import CardResponse, CardSearchResult, PriceRefreshResponse
-from src.scraper import refresh_card_price, search_cards
+from src.scraper import SCRAPERS, refresh_card_price, search_cards
 
 router = APIRouter(prefix="/api/cards", tags=["cards"])
 
@@ -113,9 +113,13 @@ async def _search_local(
 
 
 @router.get("/{card_id}", response_model=CardResponse)
+@limiter.limit("60/minute")
 async def api_get_card(
+    request: Request,
+    response: Response,
     card_id: int,
     db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_user),
 ):
     card = await db.get(Card, card_id)
     if card is None:
@@ -135,5 +139,10 @@ async def api_refresh_price(
     card = await db.get(Card, card_id)
     if card is None:
         raise HTTPException(status_code=404, detail="Card not found")
+    if card.game not in SCRAPERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No price source available for game {card.game.value}",
+        )
     price = await refresh_card_price(db, card)
     return PriceRefreshResponse(card_id=card_id, market_price=price)

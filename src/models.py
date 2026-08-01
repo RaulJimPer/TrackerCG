@@ -16,6 +16,7 @@ from sqlalchemy import (
     Numeric,
     String,
     TypeDecorator,
+    UniqueConstraint,
     text,
 )
 from sqlmodel import Field, SQLModel
@@ -122,6 +123,16 @@ class Card(SQLModel, table=True):
 
 class UserCard(SQLModel, table=True):
     __tablename__ = "usercard"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "card_id",
+            "condition",
+            "is_foil",
+            "language",
+            name="uq_usercard_user_card_variant",
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(

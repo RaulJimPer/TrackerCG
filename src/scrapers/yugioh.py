@@ -6,7 +6,8 @@ import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, AsyncIterator
+from typing import AsyncIterator
+from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup, Tag
 from playwright.async_api import Browser, Page, Playwright, async_playwright
@@ -80,7 +81,14 @@ class YugiohScraper(ScraperBase):
         results: list[CardData] = []
 
         async with _page() as page:
-            url = f"{TCGPLAYER_SEARCH}?q={query}&ProductLineName=Yu-Gi-Oh&ProductTypeName=Cards"
+            params = urlencode(
+                {
+                    "q": query,
+                    "ProductLineName": "Yu-Gi-Oh",
+                    "ProductTypeName": "Cards",
+                }
+            )
+            url = f"{TCGPLAYER_SEARCH}?{params}"
             await page.goto(url, wait_until="networkidle", timeout=30000)
             await random_sleep(1.0, 2.0)
 

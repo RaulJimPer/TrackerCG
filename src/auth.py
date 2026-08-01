@@ -105,10 +105,14 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, USER_ID]):
     ) -> None:
         if len(password) < 8:
             raise InvalidPasswordException("Password must be at least 8 characters")
+        if len(password) > 128:
+            raise InvalidPasswordException("Password must be at most 128 characters")
         if not any(c.isupper() for c in password):
             raise InvalidPasswordException("Password must contain at least one uppercase letter")
         if not any(c.isdigit() for c in password):
             raise InvalidPasswordException("Password must contain at least one digit")
+        if password.lower() == user.email.lower():
+            raise InvalidPasswordException("Password must not match the email address")
 
 
 async def get_user_manager(

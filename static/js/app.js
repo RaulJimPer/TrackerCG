@@ -204,6 +204,7 @@
     addTarget: null,
     editTarget: null,
     deleteTarget: null,
+    lastFocused: null,
   };
 
   /* ---------------- DOM helpers ---------------- */
@@ -244,17 +245,7 @@
       .replaceAll("'", "&#39;");
   }
 
-  function debounce(fn, ms) {
-    let timer;
-    return (...args) => {
-      clearTimeout(timer);
-      timer = setTimeout(() => fn(...args), ms);
-    };
-  }
-
-  /* ---------------- API wrapper ---------------- */
-
-  const ERROR_MAP = {
+  /* ---------------- API wrapper ---------------- */  const ERROR_MAP = {
     LOGIN_BAD_CREDENTIALS: "err_bad_credentials",
     REGISTER_USER_ALREADY_EXISTS: "err_email_exists",
     REGISTER_INVALID_PASSWORD: "err_invalid_password",
@@ -270,6 +261,11 @@
   function translateError(detail) {
     if (!detail) return null;
     if (typeof detail === "string" && ERROR_MAP[detail]) return t(ERROR_MAP[detail]);
+    // fastapi-users v15 register errors: {"code": "...", "reason": "..."}
+    if (typeof detail === "object" && !Array.isArray(detail) && typeof detail.code === "string") {
+      if (ERROR_MAP[detail.code]) return t(ERROR_MAP[detail.code]);
+      if (typeof detail.reason === "string") return detail.reason;
+    }
     if (Array.isArray(detail) && detail.length > 0) {
       const first = detail[0];
       if (first && typeof first === "object" && typeof first.msg === "string") return first.msg;
@@ -351,18 +347,36 @@
 
   /* ---------------- Modals ---------------- */
 
+  const FOCUSABLE =
+    'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+
+  function visibleFocusables(modal) {
+    return Array.from(modal.querySelectorAll(FOCUSABLE)).filter((el) => el.offsetParent !== null);
+  }
+
   function openModal(id) {
     const modal = $(`#${id}`);
     if (!modal) return;
     modal.classList.add("modal-open");
     requestAnimationFrame(() => modal.classList.add("modal-visible"));
+    // a11y: lock background scroll and move focus into the dialog.
+    document.body.classList.add("modal-open-body");
+    state.lastFocused = document.activeElement;
+    const first = visibleFocusables(modal)[0];
+    if (first) first.focus();
   }
 
   function closeModal(id) {
     const modal = $(`#${id}`);
     if (!modal) return;
     modal.classList.remove("modal-visible");
-    setTimeout(() => modal.classList.remove("modal-open"), 150);
+    setTimeout(() => {
+      modal.classList.remove("modal-open");
+      if (!$$(".modal-open").length) {
+        document.body.classList.remove("modal-open-body");
+        if (state.lastFocused && state.lastFocused.focus) state.lastFocused.focus();
+      }
+    }, 150);
   }
 
   function closeAllModals() {
@@ -651,11 +665,11 @@
 
   /* ---------------- Search ---------------- */
 
-  const debouncedSearch = debounce(() => runSearch(1), 600);
-
   function onSearchInput() {
     state.search.query = $("#search-input").value.trim();
-    debouncedSearch();
+    // Debounce on the shared state timer so the Enter key can cancel it.
+    clearTimeout(state.search.timer);
+    state.search.timer = setTimeout(() => runSearch(1), 600);
   }
 
   async function runSearch(page = state.search.page) {
@@ -682,17 +696,7 @@
       if (query) params.set("q", query);
       const data = await api(`/api/cards/search?${params}`);
       state.search = { ...state.search, page, items: data.items, total: data.total, pages: data.pages, inFlight: false };
-
-      const inCollectionIds = new Set(state.collection.items.map((i) => i.card_id));
-      const grid = $("#search-results");
-      if (data.items.length === 0) {
-        grid.innerHTML = "";
-        showEmpty($("#search-empty"));
-      } else {
-        hideEmpty($("#search-empty"));
-        grid.innerHTML = data.items.map((c) => searchCardHtml(c, inCollectionIds.has(c.id))).join("");
-      }
-      renderPagination($("#search-pagination"), data.page, data.pages, (p) => runSearch(p));
+      renderSearchResults();
       $("#search-hint").classList.add("hidden");
     } catch (err) {
       state.search.inFlight = false;
@@ -702,6 +706,19 @@
         toast(err.message, "error");
       }
     }
+  }
+
+  function renderSearchResults() {
+    const inCollectionIds = new Set(state.collection.items.map((i) => i.card_id));
+    const grid = $("#search-results");
+    if (state.search.items.length === 0) {
+      grid.innerHTML = "";
+      showEmpty($("#search-empty"));
+    } else {
+      hideEmpty($("#search-empty"));
+      grid.innerHTML = state.search.items.map((c) => searchCardHtml(c, inCollectionIds.has(c.id))).join("");
+    }
+    renderPagination($("#search-pagination"), state.search.page, state.search.pages, (p) => runSearch(p));
   }
 
   function renderSearchFilters() {
@@ -872,7 +889,10 @@
       closeModal("modal-add");
       toast(t("toast_added"), "success");
       if (state.view === "dashboard") loadCollection(state.collection.page);
-      else loadCollection(1);
+      else {
+        loadCollection(1);
+        renderSearchResults(); // refresh the "In collection" badge on this card
+      }
     } catch (err) {
       if (err.status !== 401) showError("#add-form-error", err.message);
     } finally {
@@ -910,7 +930,15 @@
     try {
       await api(`/api/collection/${item.id}/split`, {
         method: "POST",
-        body: { quantity: 1, condition: item.condition, is_foil: item.is_foil, language: item.language, purchase_price: item.purchase_price },
+        body: {
+          quantity: 1,
+          condition: $("#edit-condition").value,
+          is_foil: $("#edit-foil").checked,
+          language: $("#edit-language").value.trim().toUpperCase() || "EN",
+          purchase_price: parseFloat($("#edit-purchase").value) >= 0
+            ? parseFloat($("#edit-purchase").value)
+            : null,
+        },
       });
       closeModal("modal-edit");
       toast(t("toast_split"), "success");
@@ -1015,21 +1043,35 @@
   /* ---------------- Refresh price ---------------- */
 
   async function handleRefreshPrice(cardId, priceEl) {
+    const card = priceEl.closest(".tcg-card");
+    const btn = card ? card.querySelector('[data-action="refresh"]') : null;
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add("opacity-50", "cursor-wait");
+    }
     try {
       const data = await api(`/api/cards/${cardId}/refresh-price`, { method: "POST" });
       const newPrice = parseFloat(data.market_price);
       const oldPrice = parseFloat(priceEl.dataset.value || "0");
-      const card = priceEl.closest(".tcg-card");
       priceEl.textContent = formatMoney(data.market_price);
       priceEl.dataset.value = data.market_price;
       card.classList.remove("flash-up", "flash-down");
       if (!Number.isNaN(newPrice) && newPrice > oldPrice && oldPrice > 0) card.classList.add("flash-up");
       else if (!Number.isNaN(newPrice) && newPrice < oldPrice && oldPrice > 0) card.classList.add("flash-down");
+      // Update the cached item so future renders keep the fresh price without
+      // re-rendering the whole grid (which would kill the flash animation).
+      const itemId = parseInt(card.dataset.itemId, 10);
+      const item = state.collection.items.find((i) => i.id === itemId);
+      if (item) item.card.market_price = data.market_price;
       toast(t("toast_price_updated"), "success");
       loadPortfolio();
-      loadCollection(state.collection.page);
     } catch (err) {
       if (err.status !== 401) toast(err.message, "error");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove("opacity-50", "cursor-wait");
+      }
     }
   }
 
@@ -1150,7 +1192,25 @@
     });
 
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeAllModals();
+      if (e.key === "Escape") {
+        closeAllModals();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const openModals = $$(".modal-open");
+      const modal = openModals[openModals.length - 1];
+      if (!modal) return;
+      const focusables = visibleFocusables(modal);
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     });
   }
 

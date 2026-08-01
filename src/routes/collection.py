@@ -6,11 +6,12 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import current_user
 from src.database import get_async_session
-from src.models import Card, Condition, Game, User, UserCard
+from src.models import Card, Game, User, UserCard
 from src.schemas.collection import (
     CollectionAddRequest,
     CollectionItemResponse,
@@ -190,8 +191,25 @@ async def add_to_collection(
             purchase_price=body.purchase_price,
         )
         db.add(uc)
-        await db.commit()
-        await db.refresh(uc)
+        try:
+            await db.commit()
+        except IntegrityError:
+            # Race: another request created the same variant between our
+            # SELECT and INSERT. Roll back and merge into that row instead.
+            await db.rollback()
+            existing_result = await db.execute(existing_stmt)
+            existing = existing_result.scalar_one_or_none()
+            if existing is None:
+                raise HTTPException(
+                    status_code=409, detail="Conflict adding to collection"
+                )
+            existing.quantity += body.quantity
+            if body.purchase_price is not None:
+                existing.purchase_price = body.purchase_price
+            existing.language = body.language
+            await db.commit()
+            await db.refresh(existing)
+            uc = existing
 
     return _item_response(uc, card)
 
@@ -224,16 +242,23 @@ async def split_collection_item(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_user),
 ):
-    """Split one copy off a grouped collection item into its own item."""
-    stmt = select(UserCard).where(
-        UserCard.id == item_id,
-        UserCard.user_id == user.id,
-    )
-    result = await db.execute(stmt)
-    uc = result.scalar_one_or_none()
+    """Split copies off a grouped collection item into their own item.
+
+    The source item is decremented and the split copies are merged into an
+    existing item with the same (card, condition, foil, language) variant, or
+    created as a new item — atomically in a single transaction. On a unique
+    index race the transaction is rolled back and retried once.
+    """
+
+    async def _load_source() -> UserCard | None:
+        result = await db.execute(
+            select(UserCard).where(UserCard.id == item_id, UserCard.user_id == user.id)
+        )
+        return result.scalar_one_or_none()
+
+    uc = await _load_source()
     if uc is None:
         raise HTTPException(status_code=404, detail="Collection item not found")
-
     if uc.quantity <= body.quantity:
         raise HTTPException(
             status_code=400,
@@ -244,23 +269,63 @@ async def split_collection_item(
     card_result = await db.execute(card_stmt)
     card = card_result.scalar_one()
 
-    new_uc = UserCard(
-        user_id=user.id,
-        card_id=uc.card_id,
-        quantity=body.quantity,
-        condition=body.condition,
-        is_foil=body.is_foil,
-        language=body.language,
-        purchase_price=body.purchase_price,
-    )
-    uc.quantity -= body.quantity
-    if body.purchase_price is not None:
-        uc.purchase_price = body.purchase_price
+    # A separated copy must live in a different variant: the unique index
+    # (user, card, condition, foil, language) forbids a second row with the
+    # source's own variant.
+    if (
+        body.condition == uc.condition
+        and body.is_foil == uc.is_foil
+        and body.language == uc.language
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Change the condition, foil or language to separate a copy",
+        )
 
-    db.add(new_uc)
-    await db.commit()
-    await db.refresh(new_uc)
-    return _item_response(new_uc, card)
+    variant_stmt = select(UserCard).where(
+        UserCard.user_id == user.id,
+        UserCard.card_id == uc.card_id,
+        UserCard.condition == body.condition,
+        UserCard.is_foil == body.is_foil,
+        UserCard.language == body.language,
+    )
+
+    for _attempt in range(2):
+        try:
+            uc.quantity -= body.quantity
+            if body.purchase_price is not None:
+                uc.purchase_price = body.purchase_price
+            target = (await db.execute(variant_stmt)).scalar_one_or_none()
+            if target is not None:
+                target.quantity += body.quantity
+                await db.commit()
+                await db.refresh(target)
+                return _item_response(target, card)
+            new_uc = UserCard(
+                user_id=user.id,
+                card_id=uc.card_id,
+                quantity=body.quantity,
+                condition=body.condition,
+                is_foil=body.is_foil,
+                language=body.language,
+                purchase_price=body.purchase_price,
+            )
+            db.add(new_uc)
+            await db.commit()
+            await db.refresh(new_uc)
+            return _item_response(new_uc, card)
+        except IntegrityError:
+            await db.rollback()
+            uc = await _load_source()
+            if uc is None:
+                raise HTTPException(status_code=404, detail="Collection item not found")
+            if uc.quantity <= body.quantity:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot split: item has only {uc.quantity} copy(-ies)",
+                )
+
+    raise HTTPException(status_code=409, detail="Concurrent split conflict; please retry")
 
 
 @router.patch("/{item_id}", response_model=CollectionItemResponse)
@@ -281,13 +346,20 @@ async def update_collection_item(
 
     update_data = body.model_dump(exclude_unset=True)
     if update_data:
-        update_stmt = (
-            update(UserCard)
-            .where(UserCard.id == item_id, UserCard.user_id == user.id)
-            .values(**update_data)
-        )
-        await db.execute(update_stmt)
-        await db.commit()
+        try:
+            update_stmt = (
+                update(UserCard)
+                .where(UserCard.id == item_id, UserCard.user_id == user.id)
+                .values(**update_data)
+            )
+            await db.execute(update_stmt)
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="An item with these card details already exists",
+            )
         await db.refresh(uc)
 
     card_stmt = select(Card).where(Card.id == uc.card_id)

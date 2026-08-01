@@ -151,9 +151,9 @@
   </main>
 
   <!-- ============ MODAL: LOGIN ============ -->
-  <div id="modal-login" class="fixed inset-0 z-50 hidden items-start justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-y-auto">
+  <div id="modal-login" role="dialog" aria-modal="true" aria-labelledby="modal-login-title" class="fixed inset-0 z-50 hidden items-start justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-y-auto">
     <div class="bg-slate-900 rounded-xl p-8 max-w-md w-full mt-20 border border-slate-700 shadow-2xl">
-      <h2 class="text-xl font-bold text-white mb-6" data-i18n="login_title"></h2>
+      <h2 id="modal-login-title" class="text-xl font-bold text-white mb-6" data-i18n="login_title"></h2>
       <form id="form-login" class="space-y-4" novalidate>
         <div>
           <label for="login-email" class="block text-sm text-slate-400 mb-1.5" data-i18n="email"></label>
@@ -178,9 +178,9 @@
   </div>
 
   <!-- ============ MODAL: REGISTER ============ -->
-  <div id="modal-register" class="fixed inset-0 z-50 hidden items-start justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-y-auto">
+  <div id="modal-register" role="dialog" aria-modal="true" aria-labelledby="modal-register-title" class="fixed inset-0 z-50 hidden items-start justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-y-auto">
     <div class="bg-slate-900 rounded-xl p-8 max-w-md w-full mt-20 border border-slate-700 shadow-2xl">
-      <h2 class="text-xl font-bold text-white mb-6" data-i18n="register_title"></h2>
+      <h2 id="modal-register-title" class="text-xl font-bold text-white mb-6" data-i18n="register_title"></h2>
       <form id="form-register" class="space-y-4" novalidate>
         <div>
           <label for="register-email" class="block text-sm text-slate-400 mb-1.5" data-i18n="email"></label>
@@ -206,9 +206,9 @@
   </div>
 
   <!-- ============ MODAL: ADD TO COLLECTION ============ -->
-  <div id="modal-add" class="fixed inset-0 z-50 hidden items-start justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-y-auto">
+  <div id="modal-add" role="dialog" aria-modal="true" aria-labelledby="modal-add-title" class="fixed inset-0 z-50 hidden items-start justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-y-auto">
     <div class="bg-slate-900 rounded-xl p-8 max-w-md w-full mt-20 border border-slate-700 shadow-2xl">
-      <h2 class="text-xl font-bold text-white mb-4" data-i18n="add_title"></h2>
+      <h2 id="modal-add-title" class="text-xl font-bold text-white mb-4" data-i18n="add_title"></h2>
       <div id="add-card-summary" class="flex items-center gap-4 mb-6 p-3 rounded-lg bg-slate-800/60">
         <img id="add-card-image" src="" alt="" class="w-14 h-20 rounded-md bg-slate-700 object-cover" />
         <div class="min-w-0">
@@ -255,9 +255,9 @@
   </div>
 
   <!-- ============ MODAL: EDIT ITEM ============ -->
-  <div id="modal-edit" class="fixed inset-0 z-50 hidden items-start justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-y-auto">
+  <div id="modal-edit" role="dialog" aria-modal="true" aria-labelledby="modal-edit-title" class="fixed inset-0 z-50 hidden items-start justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-y-auto">
     <div class="bg-slate-900 rounded-xl p-8 max-w-md w-full mt-20 border border-slate-700 shadow-2xl">
-      <h2 class="text-xl font-bold text-white mb-6" data-i18n="edit_title"></h2>
+      <h2 id="modal-edit-title" class="text-xl font-bold text-white mb-6" data-i18n="edit_title"></h2>
       <form id="form-edit" class="space-y-4" novalidate>
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -299,14 +299,14 @@
   </div>
 
   <!-- ============ MODAL: CONFIRM DELETE ============ -->
-  <div id="modal-delete" class="fixed inset-0 z-50 hidden items-start justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-y-auto">
+  <div id="modal-delete" role="dialog" aria-modal="true" aria-labelledby="modal-delete-title" class="fixed inset-0 z-50 hidden items-start justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-y-auto">
     <div class="bg-slate-900 rounded-xl p-8 max-w-sm w-full mt-40 border border-slate-700 shadow-2xl text-center">
       <div class="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
         <svg class="w-7 h-7 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
         </svg>
       </div>
-      <h3 class="text-lg font-bold text-white mb-2" data-i18n="delete_title"></h3>
+      <h3 id="modal-delete-title" class="text-lg font-bold text-white mb-2" data-i18n="delete_title"></h3>
       <p class="text-sm text-slate-400 mb-6" data-i18n="delete_message"></p>
       <div class="flex gap-3">
         <button id="btn-delete-cancel" class="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all duration-200" data-i18n="cancel"></button>
@@ -316,7 +316,7 @@
   </div>
 
   <!-- ============ MODAL: CARD DETAILS ============ -->
-  <div id="modal-details" class="fixed inset-0 z-50 hidden items-start justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-y-auto">
+  <div id="modal-details" role="dialog" aria-modal="true" aria-labelledby="details-name" class="fixed inset-0 z-50 hidden items-start justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-y-auto">
     <div class="bg-slate-900 rounded-xl max-w-md w-full mt-20 border border-slate-700 shadow-2xl overflow-hidden">
       <div class="flex items-start gap-4 p-6 border-b border-slate-800">
         <img id="details-image" src="" alt="" class="w-24 h-[134px] rounded-lg bg-slate-800 object-cover hidden" />
@@ -362,14 +362,14 @@
   </div>
 
   <!-- ============ MODAL: CONFIRM LOGOUT ============ -->
-  <div id="modal-logout" class="fixed inset-0 z-50 hidden items-start justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-y-auto">
+  <div id="modal-logout" role="dialog" aria-modal="true" aria-labelledby="modal-logout-title" class="fixed inset-0 z-50 hidden items-start justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-y-auto">
     <div class="bg-slate-900 rounded-xl p-8 max-w-sm w-full mt-40 border border-slate-700 shadow-2xl text-center">
       <div class="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center mx-auto mb-4">
         <svg class="w-7 h-7 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
         </svg>
       </div>
-      <h3 class="text-lg font-bold text-white mb-2" data-i18n="logout_title"></h3>
+      <h3 id="modal-logout-title" class="text-lg font-bold text-white mb-2" data-i18n="logout_title"></h3>
       <p class="text-sm text-slate-400 mb-6" data-i18n="logout_message"></p>
       <div class="flex gap-3">
         <button id="btn-logout-cancel" class="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all duration-200" data-i18n="cancel"></button>
