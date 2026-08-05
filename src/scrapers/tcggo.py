@@ -145,11 +145,11 @@ class TcggoScraper(ScraperBase):
         soup = BeautifulSoup(resp.text, "html.parser")
         return self._parse_detail_price(soup)
 
-    @staticmethod
-    def _parse_detail_price(soup: BeautifulSoup) -> Decimal | None:
+    @classmethod
+    def _parse_detail_price(cls, soup: BeautifulSoup) -> Decimal | None:
         """US Market (TCGPlayer) first, then EU Low (Cardmarket)."""
         for label in ("US Market", "EU Low"):
-            value = TcggoScraper._meta_value(soup, label)
+            value = cls._meta_value(soup, label)
             price = parse_eur_price(value)
             if price is not None:
                 return price

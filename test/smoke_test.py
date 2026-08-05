@@ -62,7 +62,7 @@ def main() -> int:
             # Expected network-level failures are ignored:
             #  - the flow intentionally triggers bad logins/registers (400) and
             #    starts unauthenticated (/users/me returns 401)
-            #  - card images point at external CDNs (scryfall, pokemontcg, ...)
+            #  - card images point at external CDNs (scryfall, ...)
             #    that may be unreachable in a sandboxed network; the browser
             #    logs those as ERR_NAME_NOT_RESOLVED resource failures
             # JS exceptions surface separately via pageerror and always fail.
