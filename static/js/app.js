@@ -79,6 +79,11 @@
       toast_error: "Something went wrong. Please try again.",
       card_count: "{{count}} cards",
       game_filter: "Game",
+      condition_mint: "Mint",
+      condition_near_mint: "Near Mint",
+      condition_lightly_played: "Lightly Played",
+      condition_played: "Played",
+      condition_damaged: "Damaged",
       err_bad_credentials: "Incorrect email or password.",
       err_email_exists: "An account with this email already exists.",
       err_invalid_password: "Password must be at least 8 characters with an uppercase letter and a number.",
@@ -156,6 +161,11 @@
       toast_error: "Algo salió mal. Inténtalo de nuevo.",
       card_count: "{{count}} cartas",
       game_filter: "Juego",
+      condition_mint: "Excelente",
+      condition_near_mint: "Cuidada",
+      condition_lightly_played: "Buen estado",
+      condition_played: "Jugada",
+      condition_damaged: "Dañada",
       err_bad_credentials: "Correo o contraseña incorrectos.",
       err_email_exists: "Ya existe una cuenta con este correo.",
       err_invalid_password: "La contraseña debe tener al menos 8 caracteres, una mayúscula y un número.",
@@ -206,6 +216,12 @@
 
   function gameLabel(game) {
     return GAME_LABELS[game] || game || t("all_games");
+  }
+
+  function conditionLabel(condition) {
+    const key = `condition_${String(condition).toLowerCase().replace(/[^a-z]+/g, "_")}`;
+    const label = t(key);
+    return label === key ? condition : label;
   }
 
   function formatMoney(value) {
@@ -448,7 +464,7 @@
         <div class="mt-auto pt-2">
           <div class="flex items-baseline justify-between">
             <span class="price price-gain text-lg">${formatMoney(item.total_value)}</span>
-            ${pnl !== null ? pnlPill(pnl) : `<span class="text-xs text-slate-500">${escapeHtml(item.condition)}</span>`}
+            ${pnl !== null ? pnlPill(pnl) : `<span class="text-xs text-slate-500">${escapeHtml(conditionLabel(item.condition))}</span>`}
           </div>
           <div class="flex items-center justify-between mt-1 text-xs text-slate-500">
             <span>${escapeHtml(t("market"))}: <span class="price text-slate-300" data-price data-value="${escapeHtml(card.market_price)}">${priceHtml}</span></span>
@@ -807,6 +823,18 @@
     openModal("modal-logout");
   }
 
+  function resetUI() {
+    $("#collection-filters").innerHTML = "";
+    $("#search-filters").innerHTML = "";
+    $("#collection-pagination").classList.add("hidden");
+    $("#search-pagination").classList.add("hidden");
+    $("#search-input").value = "";
+    $("#search-hint").classList.add("hidden");
+    $("#collection-grid").innerHTML = "";
+    $("#search-results").innerHTML = "";
+    showEmpty($("#collection-empty"));
+  }
+
   async function confirmLogout() {
     const btn = $("#btn-logout-confirm");
     btn.disabled = true;
@@ -819,8 +847,7 @@
     applyAuthUI();
     state.collection = { game: null, page: 1, items: [], total: 0, pages: 0, inFlight: false, games: [] };
     state.search = { query: "", game: null, page: 1, items: [], total: 0, pages: 0, inFlight: false, timer: null };
-    $("#collection-grid").innerHTML = "";
-    $("#search-results").innerHTML = "";
+    resetUI();
     $("#portfolio-total").textContent = "$0.00";
     $("#portfolio-cards").textContent = "0";
     $("#portfolio-unique").textContent = "0";
@@ -983,7 +1010,7 @@
       img.style.display = "none";
     }
     $("#details-quantity").textContent = `×${item.quantity}`;
-    $("#details-condition").textContent = item.condition;
+    $("#details-condition").textContent = conditionLabel(item.condition);
     $("#details-language").textContent = item.language;
     $("#details-purchase").textContent = item.purchase_price && parseFloat(item.purchase_price) > 0 ? formatMoney(item.purchase_price) : "—";
     $("#details-market").textContent = formatMoney(card.market_price);
@@ -1104,6 +1131,13 @@
     });
     $("#lang-label").textContent = state.lang === "es" ? "EN" : "ES";
     $$(".nav-btn").forEach((btn) => (btn.textContent = t(`nav_${btn.dataset.view}`)));
+    $$("#add-condition, #edit-condition").forEach((sel) => {
+      const previous = sel.value;
+      Array.from(sel.options).forEach((opt) => {
+        opt.textContent = conditionLabel(opt.value);
+      });
+      sel.value = previous;
+    });
     $$(".filter-pill").forEach((pill) => {
       if (pill.classList.contains("active") && pill.textContent === "") {
         pill.textContent = t("all_games");

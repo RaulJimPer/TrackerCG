@@ -100,8 +100,7 @@ or, on Windows without relying on PATH:
 venv\Scripts\python.exe -m uvicorn src.main:app --reload
 ```
 
-Open <http://127.0.0.1:8000> in your browser. The API documentation is
-available at <http://127.0.0.1:8000/docs>.
+Open <http://127.0.0.1:8000> in your browser.
 
 ## 6. Using the application
 
