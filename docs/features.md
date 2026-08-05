@@ -97,9 +97,16 @@ A dedicated search tab independent of the user's collection.
   request instead of duplicating work.
 - **Background refresh**: when a query has only stale local matches, an
   external refresh is spawned in the background (never blocking the response).
+- **Collection refresh** (`POST /api/collection/refresh-prices`): returns
+  `202` immediately and spawns a **tracked** background refresh of stale card
+  prices. It is **single-flight**: if a refresh is already running (periodic
+  task or a previous request), the request reports `already_running: true`
+  and no duplicate task is created. Only runs when the user's collection
+  contains games with a scraper.
 - **Periodic refresh**: every 24 hours the app refreshes stale card prices for
   cards whose game has a scraper (`refresh_stale_prices`, one session per card,
-  1–3 s random delay between requests).
+  1–3 s random delay between requests). The same single-flight guard prevents
+  it from colliding with a user-triggered collection refresh.
 - **Per-card refresh**: `POST /api/cards/{id}/refresh-price` re-fetches a
   single card's market price; failures log and return the last known price.
 - **Politeness**: every external request includes a random 1–3 s delay and
@@ -122,7 +129,9 @@ A dedicated search tab independent of the user's collection.
   (`uq_usercard_user_card_variant`) guarantees one row per variant, enforced
   with atomic merge/409 handling in the API.
 - **Money**: `Decimal` everywhere, stored as `NUMERIC(10,2)`, serialized by
-  Pydantic v2 as strings in JSON responses.
+  Pydantic v2 as strings in JSON responses. Portfolio aggregation (total value)
+  is summed in Python with `Decimal` — never with SQL `SUM`, whose float
+  arithmetic on SQLite can drift by cents.
 - **Time**: aware UTC datetimes (`UTCDateTime` TypeDecorator), serialized as
   ISO-8601 with a `Z` suffix.
 

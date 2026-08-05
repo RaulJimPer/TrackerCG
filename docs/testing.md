@@ -2,7 +2,7 @@
 
 Testing strategy, how to run the suite, and what exactly is covered.
 
-**Status:** Backend verified. Suite: **47 pytest tests** + **Playwright smoke
+**Status:** Backend verified. Suite: **51 pytest tests** + **Playwright smoke
 test (37 checks)** — all green. Migrations `0001`→`0003` applied.
 
 ---
@@ -36,7 +36,7 @@ venv\Scripts\python.exe -m ruff check src test alembic
 venv\Scripts\python.exe test\smoke_test.py
 ```
 
-## 3. The pytest suite (47 tests)
+## 3. The pytest suite (51 tests)
 
 ### Harness — `test/conftest.py`
 
@@ -60,10 +60,10 @@ venv\Scripts\python.exe test\smoke_test.py
 | File | Tests | What is covered |
 |------|------:|-----------------|
 | `test_auth.py` | 11 | Register: success `201`, duplicate email `400`, weak/too-long/email-matching password `400`, invalid email `422`. Login: success sets the cookie, bad credentials `400`. `/users/me`: `401` unauthenticated, `200` authenticated. Logout: `204` clears the session. |
-| `test_collection.py` | 19 | Auth required (`401`). Add: OK, missing card `404`, **merge by variant** (same condition/foil/language → same row), different condition → new row. List: pagination, game filter, `games` reflects the user's collection. `value`: total/cards/unique. Update/delete: OK, `404`. **Split**: to a different variant `201`, same variant `400` (unique index), quantity ≥ available `400`, missing item `404`, **merge into an existing variant**, update into an existing variant → `409`. **User isolation** (Bob cannot read/delete Alice's rows). |
+| `test_collection.py` | 23 | Auth required (`401`). Add: OK, missing card `404`, **merge by variant** (same condition/foil/language → same row), different condition → new row. List: pagination, game filter, `games` reflects the user's collection. `value`: total/cards/unique + **exact Decimal aggregation** (0.10 × 3 = "0.30"). Update/delete: OK, `404`. **Split**: to a different variant `201`, same variant `400` (unique index), quantity ≥ available `400`, missing item `404`, **merge into an existing variant**, update into an existing variant → `409`, **source purchase price preserved on split**. **Refresh-prices**: `202` with empty collection (no spawn), `202` + `games` with an MTG card (tracked background spawn). **User isolation** (Bob cannot read/delete Alice's rows). |
 | `test_cards.py` | 12 | Search: auth `401`, **fresh+stale regression** (Elsa/Lorcana is never hidden), local lookup, game without scraper OK, unknown game `422`, empty DB. Get card: auth, OK, `404`. Refresh-price: no scraper `400`, `404`, auth. |
 | `test_security.py` | 3 | Security headers on `/health` and on unauthenticated API responses (CSP, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`); login cookie with `HttpOnly` + `SameSite=strict`. |
-| `test_rate_limit.py` | 2 | `429` after exceeding the `/api/cards/search` limit (30/min) and presence of `x-ratelimit-*` headers. |
+| `test_rate_limit.py` | 2 | `429` after exceeding the `/api/cards/search` limit (30/min), presence of `x-ratelimit-*` headers, and the 429 handler reporting the exact configured limit (`x-ratelimit-limit: 30`). |
 
 ## 4. E2E smoke test (Playwright)
 

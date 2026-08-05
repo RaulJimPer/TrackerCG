@@ -36,6 +36,8 @@ _instances: dict[Game, ScraperBase] = {}
 _instances_lock = threading.Lock()
 _in_flight: dict[tuple[str, str], asyncio.Future[None]] = {}
 _background_tasks: set[asyncio.Task] = set()
+_stale_refresh_running = False
+_stale_refresh_in_flight: asyncio.Task | None = None
 
 
 def _utcnow() -> datetime:
@@ -232,42 +234,76 @@ async def refresh_stale_prices(limit: int = 25) -> int:
     Only touches cards whose game has a registered scraper. Returns the number
     of cards successfully refreshed. One AsyncSession per card, random 1-3s
     delay between requests to be kind to upstream sources.
+
+    Single-flight: concurrent callers (periodic task + user-triggered refresh)
+    do not duplicate work — the first caller refreshes and the rest return 0.
     """
-    cutoff = _utcnow() - timedelta(hours=PRICE_TTL_HOURS)
-    async with async_session_maker() as db:
-        stmt = (
-            select(Card)
-            .where(Card.last_updated < cutoff)
-            .order_by(Card.last_updated)
-            .limit(limit)
-        )
-        result = await db.execute(stmt)
-        cards = list(result.scalars().all())
+    global _stale_refresh_running
+    if _stale_refresh_running:
+        return 0
+    _stale_refresh_running = True
+    try:
+        cutoff = _utcnow() - timedelta(hours=PRICE_TTL_HOURS)
+        async with async_session_maker() as db:
+            stmt = (
+                select(Card)
+                .where(Card.last_updated < cutoff)
+                .order_by(Card.last_updated)
+                .limit(limit)
+            )
+            result = await db.execute(stmt)
+            cards = list(result.scalars().all())
 
-    refreshed = 0
-    for card in cards:
-        if card.game not in SCRAPERS:
-            continue
+        refreshed = 0
+        for card in cards:
+            if card.game not in SCRAPERS:
+                continue
+            try:
+                async with async_session_maker() as db:
+                    fresh_card = await db.get(Card, card.id)
+                    if fresh_card is None:
+                        continue
+                    price = await get_scraper(fresh_card.game).get_price(
+                        fresh_card.external_id or f"{fresh_card.set_code}/{fresh_card.collector_number}"
+                    )
+                    if price is not None and price > 0:
+                        fresh_card.market_price = price
+                        fresh_card.last_updated = _utcnow()
+                        await db.commit()
+                        refreshed += 1
+            except Exception:
+                logger.exception("Stale price refresh failed for card %s", card.id)
+            await asyncio.sleep(random.uniform(1, 3))
+
+        if refreshed:
+            logger.info("Refreshed prices for %d stale card(s)", refreshed)
+        return refreshed
+    finally:
+        _stale_refresh_running = False
+
+
+def spawn_stale_price_refresh(limit: int = 25) -> bool:
+    """Schedule a tracked background refresh of stale card prices.
+
+    Fire-and-forget for route handlers, but single-flight: if a refresh is
+    already running (periodic task or a previous request), no new task is
+    spawned. Returns True when a new task was scheduled, False otherwise.
+    """
+    global _stale_refresh_in_flight
+    if _stale_refresh_in_flight is not None and not _stale_refresh_in_flight.done():
+        return False
+
+    async def _run() -> None:
         try:
-            async with async_session_maker() as db:
-                fresh_card = await db.get(Card, card.id)
-                if fresh_card is None:
-                    continue
-                price = await get_scraper(fresh_card.game).get_price(
-                    fresh_card.external_id or f"{fresh_card.set_code}/{fresh_card.collector_number}"
-                )
-                if price is not None and price > 0:
-                    fresh_card.market_price = price
-                    fresh_card.last_updated = _utcnow()
-                    await db.commit()
-                    refreshed += 1
+            await refresh_stale_prices(limit)
         except Exception:
-            logger.exception("Stale price refresh failed for card %s", card.id)
-        await asyncio.sleep(random.uniform(1, 3))
+            logger.exception("Background stale-price refresh failed")
 
-    if refreshed:
-        logger.info("Refreshed prices for %d stale card(s)", refreshed)
-    return refreshed
+    task = asyncio.ensure_future(_run())
+    _stale_refresh_in_flight = task
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return True
 
 
 async def refresh_card_price(db: AsyncSession, card: Card) -> Decimal:

@@ -64,7 +64,7 @@ details are in the **[Deployment Guide](docs/deployment.md)**.
 
 ## Testing at a glance
 
-- **47 pytest API tests** (`test/`) — auth, collection CRUD/merge/split,
+- **51 pytest API tests** (`test/`) — auth, collection CRUD/merge/split,
   search, security headers, rate limits — each on a fresh temporary database
   with external scraping neutralized.
 - **Playwright smoke test** (`test/smoke_test.py`) — 37 end-to-end checks of

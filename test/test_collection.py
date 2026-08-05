@@ -1,6 +1,7 @@
 """Collection endpoints: CRUD, merge, split, games, value, isolation."""
 from __future__ import annotations
 
+import asyncio
 from decimal import Decimal
 
 from src.models import Condition, Game
@@ -113,6 +114,17 @@ async def test_value_endpoint(client, session_maker):
     assert body["unique_cards"] == 1
 
 
+async def test_value_decimal_exact(client, session_maker):
+    """Portfolio value is summed with Decimal, never SQL float arithmetic."""
+    card = await create_card(session_maker, market_price=Decimal("0.10"))
+    await register_user(client, email="valdec@trackercg.dev")
+    token = await login(client, email="valdec@trackercg.dev")
+    await add_to_collection(client, token, card.id, quantity=3)
+    r = await client.get("/api/collection/value", headers=auth_headers(token))
+    assert r.status_code == 200
+    assert r.json()["total_value"] == "0.30"
+
+
 async def test_update_item(client, session_maker):
     card = await create_card(session_maker)
     await register_user(client, email="upd@trackercg.dev")
@@ -149,6 +161,33 @@ async def test_delete_item(client, session_maker):
         f"/api/collection/{item['id']}", headers=auth_headers(token)
     )
     assert r.status_code == 404
+
+
+async def test_refresh_prices_schedules(client):
+    """POST /api/collection/refresh-prices returns 202; with no scraper-backed
+    games in the collection no background refresh is spawned."""
+    await register_user(client, email="refr@trackercg.dev")
+    token = await login(client, email="refr@trackercg.dev")
+    r = await client.post("/api/collection/refresh-prices", headers=auth_headers(token))
+    assert r.status_code == 202
+    body = r.json()
+    assert body["status"] == "scheduled"
+    assert body["games"] == []
+    assert body["already_running"] is False
+
+
+async def test_refresh_prices_with_scraper_game_spawns(client, session_maker):
+    card = await create_card(session_maker, game=Game.MTG)
+    await register_user(client, email="refrmtg@trackercg.dev")
+    token = await login(client, email="refrmtg@trackercg.dev")
+    await add_to_collection(client, token, card.id)
+    r = await client.post("/api/collection/refresh-prices", headers=auth_headers(token))
+    assert r.status_code == 202
+    body = r.json()
+    assert body["games"] == ["MTG"]
+    assert body["already_running"] is False
+    # Let the tracked background task finish before the event loop closes.
+    await asyncio.sleep(0.1)
 
 
 async def test_split_ok(client, session_maker):
@@ -243,6 +282,25 @@ async def test_split_merges_into_existing_variant(client, session_maker):
     r = await client.get("/api/collection", headers=auth_headers(token))
     rows = [i for i in r.json()["items"] if i["card_id"] == card.id]
     assert len(rows) == 2
+
+
+async def test_split_keeps_source_purchase_price(client, session_maker):
+    """Splitting must not overwrite the source item's purchase price (M3)."""
+    card = await create_card(session_maker)
+    await register_user(client, email="splitpp@trackercg.dev")
+    token = await login(client, email="splitpp@trackercg.dev")
+    item = await add_to_collection(
+        client, token, card.id, quantity=3, purchase_price="10.00"
+    )
+    r = await client.post(
+        f"/api/collection/{item['id']}/split",
+        json={"quantity": 1, "condition": Condition.MINT.value, "purchase_price": "99.99"},
+        headers=auth_headers(token),
+    )
+    assert r.status_code == 201
+    r = await client.get(f"/api/collection/{item['id']}", headers=auth_headers(token))
+    assert r.json()["quantity"] == 2
+    assert r.json()["purchase_price"] == "10.00"
 
 
 async def test_update_variant_conflict_409(client, session_maker):

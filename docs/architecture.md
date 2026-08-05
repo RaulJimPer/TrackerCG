@@ -96,6 +96,11 @@ HTTP request
 - **Routes never scrape directly** — they call the orchestrator
   (`search_cards`, `refresh_card_price`, `refresh_stale_prices`) which owns
   caching, concurrency, and degradation.
+- **Background refreshes are tracked and single-flight**: the collection
+  refresh route and the periodic task both go through
+  `spawn_stale_price_refresh`/`refresh_stale_prices`, which keep the running
+  task in a module-level set (no garbage-collected fire-and-forget tasks) and
+  deduplicate concurrent runs.
 - **Each game's background upsert runs in its own `AsyncSession`** — sessions
   are never shared across concurrent `asyncio.gather` tasks.
 
@@ -146,7 +151,9 @@ provides the design tokens and component styles on top of the Tailwind CDN.
 ## 5. Conventions
 
 - **Money** is `Decimal`, stored as `NUMERIC(10,2)`, serialized by Pydantic v2
-  as **strings** (never floats).
+  as **strings** (never floats). Portfolio totals are aggregated in Python with
+  `Decimal` (`/api/collection/value`) instead of SQL `SUM` to avoid SQLite
+  float drift.
 - **Time** is aware UTC everywhere (`UTCDateTime`), serialized as ISO-8601
   with a `Z` suffix.
 - **Async-first**: every route and scraping function is `async def`.
