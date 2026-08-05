@@ -19,9 +19,6 @@ class Settings(BaseSettings):
     debug: bool = True
     secret_key: str = ""
     jwt_lifetime_seconds: int = 3600
-    pokemon_tcg_api_key: str = ""
-    scrydex_api_key: str = ""
-    scrydex_team_id: str = ""
     cookie_secure: bool = False
     rate_limit_enabled: bool = True
     trusted_proxy: bool = False
@@ -40,18 +37,6 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "SECRET_KEY must be set when DEBUG=false (use the .env file)"
                 )
-        if not self.debug and not self.pokemon_tcg_api_key:
-            raise ValueError(
-                "POKEMON_TCG_API_KEY must be set when DEBUG=false (use the .env file)"
-            )
-        if not self.debug and not self.scrydex_api_key:
-            raise ValueError(
-                "SCRYDEX_API_KEY must be set when DEBUG=false (use the .env file)"
-            )
-        if not self.debug and not self.scrydex_team_id:
-            raise ValueError(
-                "SCRYDEX_TEAM_ID must be set when DEBUG=false (use the .env file)"
-            )
         return self
 
 

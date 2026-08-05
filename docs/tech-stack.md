@@ -40,8 +40,8 @@ every technology in use and the rationale behind the choices.
 
 | Technology | Version | Where |
 |------------|---------|-------|
-| httpx | 0.27.2 | Scryfall (MTG), Pokémon TCG API, YGOPRODeck (Yu-Gi-Oh!), Scrydex (Riftbound) — all JSON |
-| BeautifulSoup4 | 4.12.3 | HTML parsing helper (base utilities) |
+| httpx | 0.27.2 | Scryfall (MTG), YGOPRODeck (Yu-Gi-Oh!) — JSON APIs; TCGGO (Pokémon & Riftbound) — public HTML pages |
+| BeautifulSoup4 | 4.12.3 | HTML parsing (TCGGO scrapers and base utilities) |
 
 **Design rules:**
 
@@ -50,9 +50,11 @@ every technology in use and the rationale behind the choices.
   `User-Agent` headers.
 - A random 1–3 s delay precedes every external request to avoid rate-limit /
   IP bans.
-- Runtime scraping is pure `httpx` (JSON APIs) — no headless browser in
-  production. Playwright exists only in the dev/test requirements for the E2E
-  smoke test.
+- **No API keys or accounts are required anywhere** — Scryfall, YGOPRODeck,
+  and the TCGGO public pages are all open sources.
+- Runtime scraping is pure `httpx` (JSON APIs + server-rendered HTML) — no
+  headless browser in production. Playwright exists only in the dev/test
+  requirements for the E2E smoke test.
 
 ## 3. Frontend & User Interface
 
@@ -95,9 +97,6 @@ dependency-light.
 | `DEBUG` | `true` | Dev mode; must be `false` in production |
 | `SECRET_KEY` | auto-generated in debug | JWT signing secret (required in production) |
 | `JWT_LIFETIME_SECONDS` | `3600` | Session length |
-| `POKEMON_TCG_API_KEY` | empty | Optional pokemontcg.io key (recommended in production) |
-| `SCRYDEX_API_KEY` | empty | Scrydex API key for Riftbound prices (required in production) |
-| `SCRYDEX_TEAM_ID` | empty | Scrydex team ID for Riftbound prices (required in production) |
 | `COOKIE_SECURE` | `false` | Sets the `Secure` cookie flag (HTTPS) |
 | `RATE_LIMIT_ENABLED` | `true` | Global slowapi switch |
 | `TRUSTED_PROXY` | `false` | Trust `X-Forwarded-For` only behind a reverse proxy |

@@ -47,10 +47,11 @@ trackercg/
 │   └── scrapers/
 │       ├── __init__.py
 │       ├── base.py           # ScraperBase ABC, CardData dataclass, UA rotation, random delays
+│       ├── tcggo.py          # TcggoScraper base — TCGGO public HTML (search + card pages)
 │       ├── mtg.py            # Scryfall API (httpx)
-│       ├── pokemon.py        # Pokémon TCG API (httpx, optional API key)
+│       ├── pokemon.py        # TCGGO scraping (TcggoScraper, game_slug="pokemon")
 │       ├── yugioh.py         # YGOPRODeck API (httpx)
-│       └── riftbound.py      # Scrydex API for Riftbound (httpx, API key + team ID)
+│       └── riftbound.py      # TCGGO scraping (TcggoScraper, game_slug="riftbound")
 ├── static/
 │   ├── css/style.css         # Custom styles on top of Tailwind (design tokens, components)
 │   └── js/app.js             # SPA: state, i18n, API helper, rendering, modals

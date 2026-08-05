@@ -2,7 +2,7 @@
 
 Testing strategy, how to run the suite, and what exactly is covered.
 
-**Status:** Backend verified. Suite: **50 pytest tests** + **Playwright smoke
+**Status:** Backend verified. Suite: **58 pytest tests** + **Playwright smoke
 test (37 checks)** — all green. Migrations `0001`→`0004` applied.
 
 ---
@@ -36,7 +36,7 @@ venv\Scripts\python.exe -m ruff check src test alembic
 venv\Scripts\python.exe test\smoke_test.py
 ```
 
-## 3. The pytest suite (50 tests)
+## 3. The pytest suite (58 tests)
 
 ### Harness — `test/conftest.py`
 
@@ -64,6 +64,7 @@ venv\Scripts\python.exe test\smoke_test.py
 | `test_cards.py` | 11 | Search: auth `401`, **fresh+stale regression** (Riftbound card is never hidden), local lookup, Riftbound game OK, unknown game `422`, empty DB. Get card: auth, OK, `404`. Refresh-price: `404`, auth. |
 | `test_security.py` | 3 | Security headers on `/health` and on unauthenticated API responses (CSP, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`); login cookie with `HttpOnly` + `SameSite=strict`. |
 | `test_rate_limit.py` | 2 | `429` after exceeding the `/api/cards/search` limit (30/min), presence of `x-ratelimit-*` headers, and the 429 handler reporting the exact configured limit (`x-ratelimit-limit: 30`). |
+| `test_parsers.py` | 8 | Offline unit tests for the TCGGO HTML scraper: EUR price parsing (`100,00 €`, `10.729 €`, `N/A`), set-code/collector-number extraction (`VEN-168/166`, `OGN 202b`, `MEP 023`), search-card parsing for Riftbound & Pokémon, sealed-product filtering, and detail-page price precedence (US Market before EU Low). |
 
 ## 4. E2E smoke test (Playwright)
 

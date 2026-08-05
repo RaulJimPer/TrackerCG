@@ -17,8 +17,8 @@ clean, dark-themed interface.
 - **Portfolio dashboard** — total value hero, responsive card grid, per-game
   filter pills, pagination, card details, and in-place editing.
 - **Global card search** — cache-first local results returned immediately,
-  with background scraping from Scryfall (MTG), the Pokémon TCG API,
-  YGOPRODeck (Yu-Gi-Oh!), and Scrydex (Riftbound).
+  with background scraping from Scryfall (MTG), TCGGO (Pokémon and Riftbound),
+  and YGOPRODeck (Yu-Gi-Oh!) — all from public sources, no API keys.
 - **Automated valuation** — 24 h price TTL, single-flight refreshes, a
   periodic refresh task, and per-card refresh — all priced with exact
   `Decimal` arithmetic.
@@ -63,7 +63,7 @@ details are in the **[Deployment Guide](docs/deployment.md)**.
 
 ## Testing at a glance
 
-- **50 pytest API tests** (`test/`) — auth, collection CRUD/merge/split,
+- **58 pytest tests** (`test/`) — auth, collection CRUD/merge/split,
   search, security headers, rate limits — each on a fresh temporary database
   with external scraping neutralized.
 - **Playwright smoke test** (`test/smoke_test.py`) — 37 end-to-end checks of
@@ -81,7 +81,7 @@ See the **[Testing Plan](docs/testing.md)** for details.
 
 - **Backend:** Python · FastAPI · SQLModel/SQLAlchemy (async) · SQLite
   (aiosqlite) · Alembic · fastapi-users · pwdlib/Argon2 · slowapi · Uvicorn
-- **Scraping:** httpx · BeautifulSoup4 · YGOPRODeck · Scrydex
+- **Scraping:** httpx · BeautifulSoup4 · Scryfall · YGOPRODeck · TCGGO (HTML)
 - **Frontend:** HTML5 · CSS3 · Vanilla JS · Jinja2 · Tailwind CSS (CDN) · Inter
 - **Dev/QA:** pytest · pytest-asyncio · ruff · Playwright (smoke test only)
 
@@ -93,7 +93,8 @@ You are free to use, modify, and distribute this software for personal, educatio
 ## Warning notice
 > **Status: in development.** TrackerCG is an active work-in-progress and
 > supports **four** TCGs with automated market-data scraping for now: Magic:
-> The Gathering (Scryfall), Pokémon (Pokémon TCG API), Yu-Gi-Oh! (YGOPRODeck),
-> and Riftbound (Scrydex). Expanding to more games is on the roadmap; each
+> The Gathering (Scryfall), Pokémon (TCGGO), Yu-Gi-Oh! (YGOPRODeck),
+> and Riftbound (TCGGO). Expanding to more games is on the
+> roadmap; each
 > new game requires a dedicated scraper under `src/scrapers/` plus a migration
 > to extend the `Game` enum. Features and behavior may change at any time.

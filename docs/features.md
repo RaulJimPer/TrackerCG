@@ -88,10 +88,10 @@ A dedicated search tab independent of the user's collection.
 
   | Game | Source | Method |
   |------|--------|--------|
-  | Magic: The Gathering | Scryfall API | `httpx` (JSON) |
-  | Pokémon | Pokémon TCG API (pokemontcg.io) | `httpx` (JSON, optional API key) |
-  | Yu-Gi-Oh! | YGOPRODeck API | `httpx` (JSON) |
-  | Riftbound | Scrydex API | `httpx` (JSON, API key + team ID) |
+  | Magic: The Gathering | Scryfall API | `httpx` (JSON, no key) |
+  | Pokémon | TCGGO (tcggo.com) | `httpx` + BeautifulSoup (public HTML, no key) |
+  | Yu-Gi-Oh! | YGOPRODeck API | `httpx` (JSON, no key) |
+  | Riftbound | TCGGO (tcggo.com) | `httpx` + BeautifulSoup (public HTML, no key) |
 
 - **Price TTL**: cards older than 24 hours are considered stale.
 - **Single-flight**: concurrent identical searches share one background
