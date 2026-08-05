@@ -1,191 +1,97 @@
 from __future__ import annotations
 
-import asyncio
-import logging
-import re
-from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import AsyncIterator
-from urllib.parse import urlencode
-
-from bs4 import BeautifulSoup, Tag
-from playwright.async_api import Browser, Page, Playwright, async_playwright
+from typing import Any
 
 from src.models import Game
 from src.scrapers.base import CardData, ScraperBase, random_sleep, to_decimal
 
-logger = logging.getLogger(__name__)
-
-TCGPLAYER_SEARCH = "https://www.tcgplayer.com/search/yugioh/product"
-TCGPLAYER_PRODUCT = "https://www.tcgplayer.com/product"
-
-_pw: Playwright | None = None
-_browser: Browser | None = None
-_pw_loop_id: int = 0
-_pw_lock: asyncio.Lock | None = None
-
-
-async def _get_pw_lock() -> asyncio.Lock:
-    global _pw_lock, _pw_loop_id
-    loop_id = id(asyncio.get_running_loop())
-    if _pw_lock is None or _pw_loop_id != loop_id:
-        _pw_lock = asyncio.Lock()
-        _pw_loop_id = loop_id
-    return _pw_lock
-
-
-async def _get_browser() -> Browser:
-    global _pw, _browser, _pw_loop_id
-    loop_id = id(asyncio.get_running_loop())
-    if _browser is None or _pw_loop_id != loop_id:
-        _pw = await async_playwright().start()
-        _browser = await _pw.chromium.launch(headless=True)
-        _pw_loop_id = loop_id
-    return _browser
-
-
-@asynccontextmanager
-async def _page() -> AsyncIterator[Page]:
-    lock = await _get_pw_lock()
-    async with lock:
-        browser = await _get_browser()
-        page = await browser.new_page()
-        try:
-            yield page
-        finally:
-            await page.close()
-
-
-async def close_playwright() -> None:
-    global _pw, _browser
-    if _browser is not None:
-        try:
-            await _browser.close()
-        except Exception:
-            pass
-        _browser = None
-    if _pw is not None:
-        try:
-            await _pw.stop()
-        except Exception:
-            pass
-        _pw = None
+YGOPRODECK_API = "https://db.ygoprodeck.com/api/v7/cardinfo.php"
 
 
 class YugiohScraper(ScraperBase):
     game: Game = Game.YUGIOH
 
     async def search(self, query: str) -> list[CardData]:
-        await random_sleep(1.0, 2.5)
+        await random_sleep(0.5, 1.5)
         results: list[CardData] = []
 
-        async with _page() as page:
-            params = urlencode(
-                {
-                    "q": query,
-                    "ProductLineName": "Yu-Gi-Oh",
-                    "ProductTypeName": "Cards",
-                }
-            )
-            url = f"{TCGPLAYER_SEARCH}?{params}"
-            await page.goto(url, wait_until="networkidle", timeout=30000)
-            await random_sleep(1.0, 2.0)
+        resp = await self._client.get(
+            YGOPRODECK_API,
+            params={"fname": query, "num": 20, "offset": 0},
+        )
+        # YGOPRODeck answers 400 when no card matches the fuzzy name.
+        if resp.status_code == 400:
+            return results
+        resp.raise_for_status()
+        body: dict[str, Any] = resp.json()
 
-            html = await page.content()
-            soup = BeautifulSoup(html, "html.parser")
-
-            for product in soup.select(".search-result__product")[:20]:
-                try:
-                    card = self._parse_card(product)
-                except Exception:
-                    logger.warning("Skipping malformed Yu-Gi-Oh product card", exc_info=True)
-                    card = None
-                if card is not None:
-                    results.append(card)
+        for card in body.get("data", []):
+            results.append(self._parse_card(card))
 
         return results
 
     async def get_price(self, external_id: str) -> Decimal | None:
-        await random_sleep(1.0, 2.0)
-
-        async with _page() as page:
-            url = f"{TCGPLAYER_PRODUCT}/{external_id}"
-            await page.goto(url, wait_until="networkidle", timeout=30000)
-            await random_sleep(1.0, 1.5)
-
-            html = await page.content()
-            soup = BeautifulSoup(html, "html.parser")
-            price_el = soup.select_one('[class*="market-price--value"]') or soup.select_one('[class*="price"]')
-            if price_el is None:
-                return None
-            text = price_el.get_text(strip=True)
-            match = re.search(r"\$?(\d+\.?\d*)", text)
-            if match:
-                return to_decimal(match.group(1))
+        await random_sleep(0.3, 1.0)
+        resp = await self._client.get(YGOPRODECK_API, params={"id": external_id})
+        if resp.status_code != 200:
             return None
-
-    async def close(self) -> None:
-        await close_playwright()
+        body: dict[str, Any] = resp.json()
+        data = body.get("data") or []
+        if not data:
+            return None
+        prices = (data[0].get("card_prices") or [{}])[0]
+        tcgplayer_price = prices.get("tcgplayer_price")
+        if tcgplayer_price:
+            return to_decimal(tcgplayer_price)
+        cardmarket_price = prices.get("cardmarket_price")
+        if cardmarket_price:
+            return to_decimal(cardmarket_price)
+        return None
 
     @staticmethod
-    def _parse_card(product: Tag) -> CardData | None:
-        name_el = product.select_one(".product-card__title")
-        if name_el is None:
-            return None
-        name = name_el.get_text(strip=True)
+    def _parse_card(card: dict[str, Any]) -> CardData:
+        prices = (card.get("card_prices") or [{}])[0]
+        price = (
+            prices.get("tcgplayer_price")
+            or prices.get("cardmarket_price")
+            or 0
+        )
 
-        link_el = product.select_one("a")
-        link = link_el.get("href", "") if link_el and isinstance(link_el.get("href"), str) else ""
-        tcgplayer_id = ""
-        if link:
-            match = re.search(r"/product/(\d+)", link)
-            if match:
-                tcgplayer_id = match.group(1)
-        if not tcgplayer_id:
-            return None
+        sets = card.get("card_sets") or []
+        if sets:
+            set_name = sets[0].get("set_name", "")
+            set_code = sets[0].get("set_code", "")
+            collector_number = sets[0].get("set_code", "")
+        else:
+            set_name = ""
+            set_code = ""
+            collector_number = ""
 
-        set_name_el = product.select_one(".product-card__set-name__variant")
-        set_name = set_name_el.get_text(strip=True) if set_name_el else ""
-
-        rarity_el = product.select_one(".product-card__rarity__variant")
-        rarity = "Common"
-        collector_number = ""
-        if rarity_el is not None:
-            spans = rarity_el.select("span")
-            if len(spans) >= 1:
-                rarity = spans[0].get_text(strip=True).rstrip(",")
-            if len(spans) >= 2:
-                collector_number = spans[1].get_text(strip=True).lstrip("#")
-
-        price_el = product.select_one(".product-card__market-price--value")
-        price: Decimal = Decimal("0")
-        if price_el is not None:
-            text = price_el.get_text(strip=True)
-            match = re.search(r"\$?(\d+\.?\d*)", text)
-            if match:
-                price = to_decimal(match.group(1))
-
-        img_el = product.select_one("img")
-        image_url = ""
-        if img_el is not None:
-            src = img_el.get("src") or ""
-            if not src.startswith("data:"):
-                image_url = src
-            else:
-                ds = img_el.get("data-src") or ""
-                image_url = ds
+        images = (card.get("card_images") or [{}])[0]
 
         return CardData(
             game=Game.YUGIOH,
-            name=name,
+            name=card.get("name", "Unknown"),
             set_name=set_name,
-            set_code="",
+            set_code=set_code,
             collector_number=collector_number,
-            external_id=tcgplayer_id,
-            rarity=rarity,
-            image_url=image_url,
-            market_price=price,
+            external_id=str(card.get("id", "")),
+            rarity=card.get("rarity", "Common"),
+            image_url=images.get("image_url", ""),
+            market_price=to_decimal(price),
             last_updated=datetime.now(timezone.utc),
-            game_metadata={"tcgplayer_id": tcgplayer_id, "tcgplayer_url": link},
+            game_metadata={
+                "id": card.get("id"),
+                "type": card.get("type"),
+                "frame_type": card.get("frameType"),
+                "attribute": card.get("attribute"),
+                "race": card.get("race"),
+                "atk": card.get("atk"),
+                "def": card.get("def"),
+                "level": card.get("level"),
+                "archetype": card.get("archetype"),
+                "banlist_info": card.get("banlist_info"),
+            },
         )

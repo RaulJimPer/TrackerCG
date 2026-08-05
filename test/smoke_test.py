@@ -135,13 +135,13 @@ def main() -> int:
         page.wait_for_selector("#collection-filters .filter-pill:has-text('Yu-Gi-Oh!')", timeout=10000)
         pills = page.query_selector_all("#collection-filters .filter-pill")
         texts = [p.inner_text() for p in pills]
-        check("fix4: pills = All + 6 games", len(pills) == 7 and "Pokémon" in texts and "All" in texts, str(texts))
+        check("fix4: pills = All + 4 games", len(pills) == 5 and "Pokémon" in texts and "All" in texts, str(texts))
         page.click("#collection-filters .filter-pill:has-text('Pokémon')")
         page.wait_for_timeout(1200)
         active = page.query_selector("#collection-filters .filter-pill.active")
         check("fix4: Pokémon pill active", active is not None and "Pokémon" in active.inner_text())
         remaining = page.query_selector_all("#collection-filters .filter-pill")
-        check("fix4: other pills persist", len(remaining) == 7)
+        check("fix4: other pills persist", len(remaining) == 5)
         page.click("#collection-filters .filter-pill:has-text('All')")
         page.wait_for_selector("#collection-grid .tcg-card:nth-child(20)", timeout=10000)
         check("fix4: All restores grid", page.query_selector("#collection-grid .tcg-card") is not None)
@@ -227,7 +227,7 @@ def main() -> int:
         active = page.query_selector("#search-filters .filter-pill.active")
         check("fix5: search pill highlighted", active is not None and "Yu-Gi-Oh!" in active.inner_text())
         search_pills = page.query_selector_all("#search-filters .filter-pill")
-        check("fix5: all enum games offered", len(search_pills) >= 7, str(len(search_pills)))
+        check("fix5: all 4 enum games offered", len(search_pills) == 5, str(len(search_pills)))
 
         # ---------------- Fix 8: immediate local search ----------------
         # Clear the active Yu-Gi-Oh! filter from Fix 5 first, otherwise the
@@ -235,23 +235,23 @@ def main() -> int:
         page.click("#search-filters .filter-pill:has-text('All')")
         page.wait_for_timeout(600)
         t0 = time.time()
-        page.fill("#search-input", "elsa")
-        # Wait for the specific local card (Elsa) rather than any .tcg-card —
-        # the previous search grid already contains .tcg-card elements.
-        page.wait_for_selector("#search-results .tcg-card:has-text('Elsa')", timeout=8000)
+        page.fill("#search-input", "void")
+        # Wait for the specific local card (Void Gate) rather than any
+        # .tcg-card — the previous search grid already contains elements.
+        page.wait_for_selector("#search-results .tcg-card:has-text('Void Gate')", timeout=8000)
         elapsed = time.time() - t0
         check("fix8: local results immediate", elapsed < 3.0, f"{elapsed:.2f}s")
         names = page.text_content("#search-results") or ""
-        check("fix8: Lorcana card found locally", "Elsa" in names, names[:80])
-        # Elsa is in the collection (page 1), so her search card shows the badge.
-        elsa_card = page.query_selector("#search-results .tcg-card:has-text('Elsa, Spirit of Winter')")
-        check("fix8: in-collection badge shown", elsa_card is not None and "In collection" in (elsa_card.inner_text() or ""))
+        check("fix8: Riftbound card found locally", "Void Gate" in names, names[:80])
+        # Void Gate is in the collection (page 1), so her search card shows the badge.
+        void_card = page.query_selector("#search-results .tcg-card:has-text('Void Gate')")
+        check("fix8: in-collection badge shown", void_card is not None and "In collection" in (void_card.inner_text() or ""))
 
         # ---------------- Language switch keeps pills & modals ----------------
         page.click("#btn-lang")
         page.wait_for_timeout(400)
         check("lang: switch to ES", page.text_content("#nav-search") == "Buscar")
-        page.wait_for_selector("#search-filters .filter-pill:has-text('Digimon')", timeout=5000)
+        page.wait_for_selector("#search-filters .filter-pill:has-text('Riftbound')", timeout=5000)
         check("lang: pills still rendered", True)
         page.click("#btn-lang")
         page.wait_for_timeout(400)

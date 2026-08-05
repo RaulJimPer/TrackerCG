@@ -11,22 +11,7 @@
     MTG: "Magic: The Gathering",
     POKEMON: "Pokémon",
     YUGIOH: "Yu-Gi-Oh!",
-    LORCANA: "Lorcana",
-    ONEPIECE: "One Piece",
-    DIGIMON: "Digimon",
-    FLESH_AND_BLOOD: "Flesh and Blood",
-    VANGUARD: "Cardfight!! Vanguard",
-    WEISS_SCHWARZ: "Weiss Schwarz",
-    DBS: "Dragon Ball Super",
-    FF_TCG: "Final Fantasy TCG",
-    FORCE_OF_WILL: "Force of Will",
-    L5R: "Legend of the Five Rings",
-    BATTLE_SPIRITS: "Battle Spirits",
-    GUNDAM: "Gundam TCG",
-    STAR_WARS: "Star Wars Unlimited",
-    KEYFORGE: "KeyForge",
-    SORCERY: "Sorcery: Contested Realm",
-    OTHER: "Other",
+    RIFTBOUND: "Riftbound",
   };
 
   const CONDITIONS = ["Mint", "Near Mint", "Lightly Played", "Played", "Damaged"];

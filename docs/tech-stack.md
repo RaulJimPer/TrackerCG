@@ -40,9 +40,8 @@ every technology in use and the rationale behind the choices.
 
 | Technology | Version | Where |
 |------------|---------|-------|
-| httpx | 0.27.2 | Scryfall (MTG) and Pokémon TCG API (JSON) |
-| BeautifulSoup4 | 4.12.3 | HTML parsing (all scrapers) |
-| Playwright | 1.61.0 | Yu-Gi-Oh! (TCGplayer, JS-rendered pages) — **only** in `src/scrapers/yugioh.py` |
+| httpx | 0.27.2 | Scryfall (MTG), Pokémon TCG API, YGOPRODeck (Yu-Gi-Oh!), Scrydex (Riftbound) — all JSON |
+| BeautifulSoup4 | 4.12.3 | HTML parsing helper (base utilities) |
 
 **Design rules:**
 
@@ -51,9 +50,9 @@ every technology in use and the rationale behind the choices.
   `User-Agent` headers.
 - A random 1–3 s delay precedes every external request to avoid rate-limit /
   IP bans.
-- Playwright uses a **module-level shared browser**, serialized page access
-  through a per-event-loop lock (`_page()` async context manager), and is
-  closed via `close_playwright()` on shutdown.
+- Runtime scraping is pure `httpx` (JSON APIs) — no headless browser in
+  production. Playwright exists only in the dev/test requirements for the E2E
+  smoke test.
 
 ## 3. Frontend & User Interface
 
@@ -97,6 +96,8 @@ dependency-light.
 | `SECRET_KEY` | auto-generated in debug | JWT signing secret (required in production) |
 | `JWT_LIFETIME_SECONDS` | `3600` | Session length |
 | `POKEMON_TCG_API_KEY` | empty | Optional pokemontcg.io key (recommended in production) |
+| `SCRYDEX_API_KEY` | empty | Scrydex API key for Riftbound prices (required in production) |
+| `SCRYDEX_TEAM_ID` | empty | Scrydex team ID for Riftbound prices (required in production) |
 | `COOKIE_SECURE` | `false` | Sets the `Secure` cookie flag (HTTPS) |
 | `RATE_LIMIT_ENABLED` | `true` | Global slowapi switch |
 | `TRUSTED_PROXY` | `false` | Trust `X-Forwarded-For` only behind a reverse proxy |

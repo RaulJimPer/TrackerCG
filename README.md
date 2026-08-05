@@ -1,8 +1,8 @@
 # TrackerCG
 
 A fullstack web application for managing personal Trading Card Game (TCG)
-collections — Magic: The Gathering, Pokémon, Yu-Gi-Oh!, Lorcana, One Piece,
-Digimon, and more. TrackerCG automatically pulls real-time market values from
+collections — currently **Magic: The Gathering, Pokémon, Yu-Gi-Oh!, and
+Riftbound**. TrackerCG automatically pulls real-time market values from
 external sources and computes the total value of your inventory through a
 clean, dark-themed interface.
 
@@ -17,8 +17,8 @@ clean, dark-themed interface.
 - **Portfolio dashboard** — total value hero, responsive card grid, per-game
   filter pills, pagination, card details, and in-place editing.
 - **Global card search** — cache-first local results returned immediately,
-  with background scraping from Scryfall (MTG), the Pokémon TCG API, and
-  TCGplayer (Yu-Gi-Oh!).
+  with background scraping from Scryfall (MTG), the Pokémon TCG API,
+  YGOPRODeck (Yu-Gi-Oh!), and Scrydex (Riftbound).
 - **Automated valuation** — 24 h price TTL, single-flight refreshes, a
   periodic refresh task, and per-card refresh — all priced with exact
   `Decimal` arithmetic.
@@ -33,10 +33,9 @@ python -m venv venv
 .\venv\Scripts\Activate.ps1          # Windows
 # source venv/bin/activate           # macOS / Linux
 
-# 2. Install dependencies (+ Playwright browser for Yu-Gi-Oh! scraping)
+# 2. Install dependencies (+ dev/testing extras)
 pip install -r requirements.txt
-pip install -r requirements-dev.txt  # optional: dev/testing
-playwright install chromium
+pip install -r requirements-dev.txt  # optional: dev/testing (Playwright smoke test)
 
 # 3. Configure (optional but recommended)
 #    copy .env.example to .env and adjust SECRET_KEY / DEBUG / etc.
@@ -64,7 +63,7 @@ details are in the **[Deployment Guide](docs/deployment.md)**.
 
 ## Testing at a glance
 
-- **51 pytest API tests** (`test/`) — auth, collection CRUD/merge/split,
+- **50 pytest API tests** (`test/`) — auth, collection CRUD/merge/split,
   search, security headers, rate limits — each on a fresh temporary database
   with external scraping neutralized.
 - **Playwright smoke test** (`test/smoke_test.py`) — 37 end-to-end checks of
@@ -82,9 +81,9 @@ See the **[Testing Plan](docs/testing.md)** for details.
 
 - **Backend:** Python · FastAPI · SQLModel/SQLAlchemy (async) · SQLite
   (aiosqlite) · Alembic · fastapi-users · pwdlib/Argon2 · slowapi · Uvicorn
-- **Scraping:** httpx · BeautifulSoup4 · Playwright (Yu-Gi-Oh! only)
+- **Scraping:** httpx · BeautifulSoup4 · YGOPRODeck · Scrydex
 - **Frontend:** HTML5 · CSS3 · Vanilla JS · Jinja2 · Tailwind CSS (CDN) · Inter
-- **Dev/QA:** pytest · pytest-asyncio · ruff · Playwright
+- **Dev/QA:** pytest · pytest-asyncio · ruff · Playwright (smoke test only)
 
 ## License
 
@@ -93,7 +92,8 @@ You are free to use, modify, and distribute this software for personal, educatio
 
 ## Warning notice
 > **Status: in development.** TrackerCG is an active work-in-progress and
-> does **not** yet support every TCG on the market. Only Magic: The Gathering,
-> Pokémon, and Yu-Gi-Oh! have automated market-data scraping for now; other games
-> (Lorcana, One Piece, Digimon, ...) are searchable from the local catalog but
-> lack live price updates. Features and behavior may change at any time.
+> supports **four** TCGs with automated market-data scraping for now: Magic:
+> The Gathering (Scryfall), Pokémon (Pokémon TCG API), Yu-Gi-Oh! (YGOPRODeck),
+> and Riftbound (Scrydex). Expanding to more games is on the roadmap; each
+> new game requires a dedicated scraper under `src/scrapers/` plus a migration
+> to extend the `Game` enum. Features and behavior may change at any time.

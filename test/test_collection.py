@@ -74,12 +74,12 @@ async def test_list_collection_pagination(client, session_maker):
 
 async def test_list_collection_filter_by_game(client, session_maker):
     mtg = await create_card(session_maker, game=Game.MTG, name="Bolt")
-    await create_card(session_maker, game=Game.LORCANA, name="Elsa")
+    await create_card(session_maker, game=Game.RIFTBOUND, name="Void Gate")
     await register_user(client, email="filter@trackercg.dev")
     token = await login(client, email="filter@trackercg.dev")
     await add_to_collection(client, token, mtg.id)
     r = await client.get(
-        "/api/collection?game=LORCANA", headers=auth_headers(token)
+        "/api/collection?game=RIFTBOUND", headers=auth_headers(token)
     )
     assert r.status_code == 200
     assert r.json()["total"] == 0
@@ -87,7 +87,7 @@ async def test_list_collection_filter_by_game(client, session_maker):
 
 async def test_games_endpoint(client, session_maker):
     await create_card(session_maker, game=Game.POKEMON, name="Pika")
-    await create_card(session_maker, game=Game.DIGIMON, name="Agumon")
+    await create_card(session_maker, game=Game.RIFTBOUND, name="Void Gate")
     await register_user(client, email="games@trackercg.dev")
     token = await login(client, email="games@trackercg.dev")
     r = await client.get("/api/collection/games", headers=auth_headers(token))

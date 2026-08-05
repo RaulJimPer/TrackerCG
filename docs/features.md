@@ -42,7 +42,7 @@ After login the user lands on their private portfolio view.
   saved card with image, name, game badge, quantity, condition, and per-item
   total value.
 - **Game filter pills**: filter the collection by game (MTG, Pokémon,
-  Yu-Gi-Oh!, Lorcana, One Piece, Digimon, ...). Pills are loaded from
+  Yu-Gi-Oh!, Riftbound). Pills are loaded from
   `GET /api/collection/games` and never rebuilt from a filtered page, so
   filters never "lose" games.
 - **Pagination**: 20 items per page with page controls.
@@ -84,13 +84,14 @@ A dedicated search tab independent of the user's collection.
 
 ## 4. Market Data & Price Automation
 
-- **Three scrapers**, each isolated under `src/scrapers/`:
+- **Four scrapers**, each isolated under `src/scrapers/`:
 
   | Game | Source | Method |
   |------|--------|--------|
   | Magic: The Gathering | Scryfall API | `httpx` (JSON) |
   | Pokémon | Pokémon TCG API (pokemontcg.io) | `httpx` (JSON, optional API key) |
-  | Yu-Gi-Oh! | TCGplayer product pages | Playwright (JS-rendered HTML) |
+  | Yu-Gi-Oh! | YGOPRODeck API | `httpx` (JSON) |
+  | Riftbound | Scrydex API | `httpx` (JSON, API key + team ID) |
 
 - **Price TTL**: cards older than 24 hours are considered stale.
 - **Single-flight**: concurrent identical searches share one background
@@ -116,9 +117,7 @@ A dedicated search tab independent of the user's collection.
 
 ## 5. Data Model
 
-- **Games** (`Game` enum): MTG, POKEMON, YUGIOH, LORCANA, ONEPIECE, DIGIMON,
-  FLESH_AND_BLOOD, VANGUARD, WEISS_SCHWARZ, DBS, FF_TCG, FORCE_OF_WILL, L5R,
-  BATTLE_SPIRITS, GUNDAM, STAR_WARS, KEYFORGE, SORCERY, OTHER.
+- **Games** (`Game` enum): MTG, POKEMON, YUGIOH, RIFTBOUND.
 - **Conditions** (`Condition` enum): Mint, Near Mint, Lightly Played, Played,
   Damaged.
 - **Card**: catalog entry (game, name, set, collector number, rarity, image,

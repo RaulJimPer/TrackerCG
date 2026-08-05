@@ -32,17 +32,13 @@ pip install -r requirements.txt
 For development and testing, also install:
 
 ```bash
-pip install -r requirements-dev.txt   # pytest, pytest-asyncio, ruff
-```
-
-Install the Playwright browser binary used by the Yu-Gi-Oh! scraper:
-
-```bash
-playwright install chromium
+pip install -r requirements-dev.txt   # pytest, pytest-asyncio, ruff, Playwright
 ```
 
 > The Pokémon TCG API works without a key but is heavily rate-limited; set
-> `POKEMON_TCG_API_KEY` in the environment for reliable scraping.
+> `POKEMON_TCG_API_KEY` in the environment for reliable scraping. Riftbound
+> prices require a free Scrydex account: set `SCRYDEX_API_KEY` and
+> `SCRYDEX_TEAM_ID` (see [Configuration](#3-configuration)).
 
 ## 3. Configuration
 
@@ -58,6 +54,8 @@ cp .env.example .env
 | `DEBUG` | `true` during development; **must be `false` in production**. |
 | `COOKIE_SECURE` | `true` when serving over HTTPS (sets the `Secure` flag on the session cookie). |
 | `POKEMON_TCG_API_KEY` | Optional; recommended in production. |
+| `SCRYDEX_API_KEY` | Required for Riftbound prices; get a free key at scrydex.com. |
+| `SCRYDEX_TEAM_ID` | Required for Riftbound prices; shown in your Scrydex account. |
 | `RATE_LIMIT_ENABLED` | Global rate-limit switch (default `true`). |
 | `TRUSTED_PROXY` | Set `true` **only** behind a reverse proxy that overwrites `X-Forwarded-For`. |
 | `JWT_LIFETIME_SECONDS` | Session length in seconds (default `3600`). |
@@ -85,7 +83,7 @@ not part of a fresh clone). If present, it seeds:
 
 - Users `test@trackercg.dev` / `TestPass123` and `second@trackercg.dev` /
   `TestPass123`;
-- 17 unique cards across MTG, Pokémon, Yu-Gi-Oh!, Lorcana, One Piece, Digimon;
+- 17 unique cards across MTG, Pokémon, Yu-Gi-Oh!, Riftbound;
 - 30 collection items for the main user (page 1 = 20, page 2 = 10).
 
 Run it (idempotent — re-running wipes only its own rows):
@@ -130,8 +128,9 @@ available at <http://127.0.0.1:8000/docs>.
 
 ## 7. Production notes
 
-- Set `DEBUG=false`; TrackerCG will then **require** `SECRET_KEY` and
-  `POKEMON_TCG_API_KEY` at startup (fail-fast validation).
+- Set `DEBUG=false`; TrackerCG will then **require** `SECRET_KEY`,
+  `POKEMON_TCG_API_KEY`, `SCRYDEX_API_KEY`, and `SCRYDEX_TEAM_ID` at startup
+  (fail-fast validation).
 - Serve over HTTPS and set `COOKIE_SECURE=true`.
 - `Strict-Transport-Security` (HSTS) is added automatically when
   `DEBUG=false`.
@@ -146,7 +145,8 @@ available at <http://127.0.0.1:8000/docs>.
 | Symptom | Likely fix |
 |---------|-----------|
 | `ModuleNotFoundError` on startup | Activate the venv / reinstall `requirements.txt`. |
-| Yu-Gi-Oh! searches return nothing | Run `playwright install chromium`. |
+| Yu-Gi-Oh! searches return nothing | Temporary YGOPRODeck outage; check your network and retry later. |
 | Pokémon searches fail / rate-limited | Set `POKEMON_TCG_API_KEY`. |
+| Riftbound searches return nothing | Set `SCRYDEX_API_KEY` + `SCRYDEX_TEAM_ID` (free at scrydex.com). |
 | Port already in use | Change the port: `uvicorn src.main:app --port 8001`. |
-| `SECRET_KEY` / `POKEMON_TCG_API_KEY` error at startup | With `DEBUG=false` both are mandatory; set them in `.env`. |
+| `SECRET_KEY` / API-key error at startup | With `DEBUG=false` `SECRET_KEY`, `POKEMON_TCG_API_KEY`, `SCRYDEX_API_KEY`, and `SCRYDEX_TEAM_ID` are mandatory; set them in `.env`. |

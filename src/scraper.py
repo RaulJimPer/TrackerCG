@@ -20,6 +20,7 @@ from src.models import Card, Game
 from src.scrapers.base import CardData, ScraperBase
 from src.scrapers.mtg import MtgScraper
 from src.scrapers.pokemon import PokemonScraper
+from src.scrapers.riftbound import RiftboundScraper
 from src.scrapers.yugioh import YugiohScraper
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ SCRAPERS: dict[Game, type[ScraperBase]] = {
     Game.MTG: MtgScraper,
     Game.POKEMON: PokemonScraper,
     Game.YUGIOH: YugiohScraper,
+    Game.RIFTBOUND: RiftboundScraper,
 }
 
 PRICE_TTL_HOURS = 24
@@ -63,7 +65,7 @@ def get_scraper(game: Game) -> ScraperBase:
 
 
 async def close_scrapers() -> None:
-    """Close all pooled clients and the shared Playwright browser."""
+    """Close all pooled scraper clients (httpx)."""
     for game, scraper in list(_instances.items()):
         try:
             await scraper.close()
@@ -198,11 +200,10 @@ async def search_cards(
     """Cache-first search.
 
     Every local match is returned immediately — fresh or stale — so the user
-    never waits for scraping and games without a scraper (Lorcana, Digimon,
-    One Piece) stay visible. An external refresh is only spawned when nothing
-    local is fresh, and only when there are no local matches at all do we wait
-    for the single-flight background refresh so newly-scraped cards can be
-    returned.
+    never waits for scraping and stale local matches stay visible. An external
+    refresh is only spawned when nothing local is fresh, and only when there
+    are no local matches at all do we wait for the single-flight background
+    refresh so newly-scraped cards can be returned.
     """
     local = await _local_matches(db, game, query)
     now = _utcnow()
@@ -342,7 +343,9 @@ async def cli_search(game_name: str, query: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="TrackerCG Scraper CLI")
-    parser.add_argument("--game", required=True, help="Game code (e.g. MTG, POKEMON, YUGIOH)")
+    parser.add_argument(
+        "--game", required=True, help="Game code (e.g. MTG, POKEMON, YUGIOH, RIFTBOUND)"
+    )
     parser.add_argument("--search", required=True, help="Card name to search")
     args = parser.parse_args()
     asyncio.run(cli_search(args.game.upper(), args.search))

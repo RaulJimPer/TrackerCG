@@ -14,35 +14,35 @@ async def test_search_requires_auth(client):
 
 
 async def test_search_mixed_fresh_and_stale_returns_all(client, session_maker):
-    # A stale match (game without scraper) must not be hidden when another
+    # A stale match (game without fresh data) must not be hidden when another
     # game has fresh matches for the same query (regression: fresh-only return
-    # used to drop Elsa because "Gaius van Baelsar" also matches "%elsa%").
+    # used to drop stale cards because "%void%" matched a fresh card elsewhere).
     stale = datetime.now(timezone.utc) - timedelta(days=2)
     await create_card(
         session_maker,
-        name="Elsa, Spirit of Winter",
-        game=Game.LORCANA,
+        name="Void Gate",
+        game=Game.RIFTBOUND,
         last_updated=stale,
     )
     await create_card(
         session_maker,
-        name="Gaius van Baelsar",
+        name="Void Snare",
         game=Game.MTG,
-        external_id="uuid-elsa-match",
+        external_id="uuid-void-snare",
     )
     await register_user(client)
     token = await login(client)
     r = await client.get(
         "/api/cards/search",
-        params={"q": "elsa"},
+        params={"q": "void"},
         headers=auth_headers(token),
     )
     assert r.status_code == 200
     body = r.json()
     assert body["total"] == 2
     names = {item["name"] for item in body["items"]}
-    assert "Elsa, Spirit of Winter" in names
-    assert "Gaius van Baelsar" in names
+    assert "Void Gate" in names
+    assert "Void Snare" in names
 
 
 async def test_search_local_finds_card(client, session_maker):
@@ -60,14 +60,15 @@ async def test_search_local_finds_card(client, session_maker):
     assert body["items"][0]["name"] == "Blue-Eyes White Dragon"
 
 
-async def test_search_no_scraper_game_ok(client, session_maker):
-    # Lorcana has no scraper: local results only, no 422/500.
-    await create_card(session_maker, name="Elsa", game=Game.LORCANA)
+async def test_search_rifbound_game_ok(client, session_maker):
+    # Every supported game has a scraper; Riftbound searches resolve to local
+    # results without 422/500 even when the external source is unreachable.
+    await create_card(session_maker, name="Void Gate", game=Game.RIFTBOUND)
     await register_user(client)
     token = await login(client)
     r = await client.get(
         "/api/cards/search",
-        params={"q": "elsa", "game": "LORCANA"},
+        params={"q": "void", "game": "RIFTBOUND"},
         headers=auth_headers(token),
     )
     assert r.status_code == 200
@@ -117,18 +118,6 @@ async def test_get_card_not_found(client):
     token = await login(client)
     r = await client.get("/api/cards/999999", headers=auth_headers(token))
     assert r.status_code == 404
-
-
-async def test_refresh_price_no_scraper_game_400(client, session_maker):
-    card = await create_card(session_maker, game=Game.LORCANA)
-    await register_user(client)
-    token = await login(client)
-    r = await client.post(
-        f"/api/cards/{card.id}/refresh-price",
-        headers=auth_headers(token),
-    )
-    assert r.status_code == 400
-    assert "No price source available" in r.json()["detail"]
 
 
 async def test_refresh_price_not_found_404(client):
