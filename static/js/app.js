@@ -375,8 +375,10 @@
     const modal = $(`#${id}`);
     if (!modal) return;
     modal.classList.remove("modal-visible");
+    // Remove the display flag synchronously so a closing modal can never stay
+    // as a full-screen overlay intercepting clicks (e.g. right after login).
+    modal.classList.remove("modal-open");
     setTimeout(() => {
-      modal.classList.remove("modal-open");
       if (!$$(".modal-open").length) {
         document.body.classList.remove("modal-open-body");
         if (state.lastFocused && state.lastFocused.focus) state.lastFocused.focus();
@@ -387,8 +389,9 @@
   function closeAllModals() {
     $$(".modal-open").forEach((m) => {
       m.classList.remove("modal-visible");
-      setTimeout(() => m.classList.remove("modal-open"), 150);
+      m.classList.remove("modal-open");
     });
+    document.body.classList.remove("modal-open-body");
   }
 
   function showError(containerId, msg) {
@@ -411,7 +414,12 @@
     $(`#view-${view}`).hidden = false;
     $$(".nav-btn").forEach((btn) => btn.classList.toggle("active", btn.dataset.view === view));
     if (view === "dashboard" && state.user) loadCollection(1);
-    if (view === "search" && state.user) $("#search-input").focus();
+    if (view === "search" && state.user) {
+      // resetUI() clears the filters on logout; re-render them when entering
+      // the search view so they survive a logout -> login cycle.
+      renderSearchFilters();
+      $("#search-input").focus();
+    }
   }
 
   /* ---------------- Skeletons ---------------- */
@@ -848,6 +856,9 @@
   }
 
   function handleLogout() {
+    // confirmLogout disables the button for the duration of the request but
+    // never re-enables it; reset it every time the modal is opened.
+    $("#btn-logout-confirm").disabled = false;
     openModal("modal-logout");
   }
 

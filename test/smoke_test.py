@@ -129,6 +129,32 @@ def main() -> int:
         page.keyboard.press("Escape")
         page.wait_for_timeout(300)
 
+        # ---------------- Register -> login -> logout (fresh account) ----------------
+        # Regression: after registering and logging in, the login modal must not
+        # linger as a full-screen overlay intercepting clicks (the logout button
+        # was unclickable until a page reload). The modal-open flag is removed
+        # synchronously by closeModal, so no modal may be open after login.
+        fresh_email = f"smoke-{int(time.time())}@trackercg.dev"
+        page.click("#btn-register")
+        open_modal(page, "#modal-register")
+        fill_and_submit(page, "#register-email", "#register-password", "#form-register", fresh_email, "FreshPass123")
+        page.wait_for_selector("#modal-login.modal-open", timeout=8000)
+        check("fresh: login modal pre-fills email", page.input_value("#login-email") == fresh_email)
+        fill_and_submit(page, "#login-email", "#login-password", "#form-login", fresh_email, "FreshPass123")
+        page.wait_for_selector("#auth-user:not(.hidden)", timeout=10000)
+        page.wait_for_timeout(400)
+        lingering = page.evaluate(
+            """() => Array.from(document.querySelectorAll('[id^="modal-"]'))
+                .filter(m => m.classList.contains('modal-open'))
+                .map(m => m.id)"""
+        )
+        check("fresh: no lingering modal after login", lingering == [], str(lingering))
+        page.click("#btn-logout")
+        open_modal(page, "#modal-logout")
+        page.click("#btn-logout-confirm")
+        page.wait_for_selector("#auth-anon:not(.hidden)", timeout=10000)
+        check("fresh: logout right after register works", page.query_selector("#auth-user:not(.hidden)") is None)
+
         # ---------------- Login (real) ----------------
         page.click("#btn-login")
         open_modal(page, "#modal-login")
@@ -218,6 +244,9 @@ def main() -> int:
         check("fix3: cancel keeps session", page.query_selector("#auth-user:not(.hidden)") is not None)
         page.click("#btn-logout")
         open_modal(page, "#modal-logout")
+        # Second confirm in the same page session: regression for the logout
+        # confirm button staying disabled after the first use (handleLogout
+        # must re-enable it every time the modal opens).
         page.click("#btn-logout-confirm")
         page.wait_for_selector("#auth-anon:not(.hidden)", timeout=10000)
         check("fix3: portfolio reset to $0.00", page.text_content("#portfolio-total") == "$0.00")
