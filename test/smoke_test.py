@@ -76,6 +76,17 @@ def main() -> int:
         page.goto(BASE_URL, wait_until="load")
         check("index loads with login button", page.locator("#btn-login").count() == 1)
 
+        # ---------------- Anonymous view state ----------------
+        # Without a session the dashboard shows only the auth disclaimer:
+        # no portfolio hero, no pills, no grid.
+        check("anon: dashboard auth prompt visible", page.locator("#collection-auth-prompt:not(.hidden)").count() == 1)
+        check("anon: portfolio hero hidden", page.locator("#portfolio-hero").is_hidden())
+        page.click("#nav-search")
+        check("anon: search auth prompt visible", page.locator("#search-auth-prompt:not(.hidden)").count() == 1)
+        check("anon: search bar hidden", page.locator("#search-bar-block").is_hidden())
+        page.click("#nav-dashboard")
+        check("anon: dashboard prompt still visible", page.locator("#collection-auth-prompt:not(.hidden)").count() == 1)
+
         # ---------------- Fix 1: login error inside the box ----------------
         page.click("#btn-login")
         open_modal(page, "#modal-login")
@@ -128,6 +139,7 @@ def main() -> int:
         page.wait_for_selector("#collection-grid .tcg-card", timeout=15000)
         check("login works", True)
         check("portfolio loaded", page.text_content("#portfolio-total") != "$0.00")
+        check("auth: portfolio hero visible after login", page.locator("#portfolio-hero").is_visible())
 
         # ---------------- Fix 4: stable collection pills ----------------
         # Pills are rendered from GET /api/collection/games; wait until the
@@ -220,6 +232,7 @@ def main() -> int:
 
         # ---------------- Fix 5: search pills highlighted ----------------
         page.click("#nav-search")
+        check("auth: search bar visible after login", page.locator("#search-bar-block").is_visible())
         page.fill("#search-input", "blue")
         page.wait_for_selector("#search-results .tcg-card", timeout=15000)
         page.click("#search-filters .filter-pill:has-text('Yu-Gi-Oh!')")

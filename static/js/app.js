@@ -33,6 +33,8 @@
       search_hint: "Searching external sources... this may take a few seconds.",
       search_no_results: "No cards found. Try a different search.",
       all_games: "All",
+      auth_prompt_title: "Sign in to access your collection",
+      auth_prompt_hint: "Create an account or sign in to track your TCG cards and their market value.",
       login: "Sign in",
       register: "Register",
       logout: "Log out",
@@ -115,6 +117,8 @@
       search_hint: "Buscando en fuentes externas... puede tardar unos segundos.",
       search_no_results: "No se encontraron cartas. Prueba con otra búsqueda.",
       all_games: "Todos",
+      auth_prompt_title: "Inicia sesión para acceder a tu colección",
+      auth_prompt_hint: "Crea una cuenta o inicia sesión para gestionar tus cartas TCG y su valor de mercado.",
       login: "Iniciar sesión",
       register: "Registrarse",
       logout: "Cerrar sesión",
@@ -762,6 +766,30 @@
       user.classList.remove("flex");
       $("#user-email").textContent = "";
     }
+    renderViewAuthState();
+  }
+
+  function renderViewAuthState() {
+    const authed = state.user !== null;
+    // Dashboard: the portfolio hero, pills and grid belong to authenticated
+    // users; anonymous users only see the sign-in/register disclaimer.
+    $("#portfolio-hero").classList.toggle("hidden", !authed);
+    $("#collection-filters").classList.toggle("hidden", !authed);
+    $("#collection-auth-prompt").classList.toggle("hidden", authed);
+    // Search: without a session the search bar and its results are disabled,
+    // replaced by the same disclaimer.
+    $("#search-bar-block").classList.toggle("hidden", !authed);
+    $("#search-auth-prompt").classList.toggle("hidden", authed);
+    if (!authed) {
+      // Never leave collection/search content visible to anonymous users.
+      $("#collection-grid").innerHTML = "";
+      $("#collection-empty").classList.add("hidden");
+      $("#collection-pagination").classList.add("hidden");
+      $("#search-results").innerHTML = "";
+      $("#search-empty").classList.add("hidden");
+      $("#search-pagination").classList.add("hidden");
+      $("#search-hint").classList.add("hidden");
+    }
   }
 
   async function handleLogin(e) {
@@ -844,10 +872,12 @@
       /* noop */
     }
     state.user = null;
-    applyAuthUI();
     state.collection = { game: null, page: 1, items: [], total: 0, pages: 0, inFlight: false, games: [] };
     state.search = { query: "", game: null, page: 1, items: [], total: 0, pages: 0, inFlight: false, timer: null };
     resetUI();
+    // Apply the auth UI after resetUI so the anonymous disclaimer replaces the
+    // just-cleared collection/search content instead of stacking on it.
+    applyAuthUI();
     $("#portfolio-total").textContent = "$0.00";
     $("#portfolio-cards").textContent = "0";
     $("#portfolio-unique").textContent = "0";
@@ -1172,6 +1202,11 @@
 
     $("#btn-login").addEventListener("click", () => openModal("modal-login"));
     $("#btn-register").addEventListener("click", () => openModal("modal-register"));
+    // Auth disclaimers (dashboard + search) open the same modals.
+    $("#btn-collection-prompt-login").addEventListener("click", () => openModal("modal-login"));
+    $("#btn-collection-prompt-register").addEventListener("click", () => openModal("modal-register"));
+    $("#btn-search-prompt-login").addEventListener("click", () => openModal("modal-login"));
+    $("#btn-search-prompt-register").addEventListener("click", () => openModal("modal-register"));
     $("#btn-goto-register").addEventListener("click", () => {
       closeModal("modal-login");
       openModal("modal-register");
@@ -1236,6 +1271,8 @@
   function init() {
     bindEvents();
     applyI18n();
+    // Default to the anonymous view state until checkSession() resolves.
+    renderViewAuthState();
     switchView("dashboard");
     renderSearchFilters();
     checkSession();
