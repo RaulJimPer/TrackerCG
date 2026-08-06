@@ -66,7 +66,7 @@ details are in the **[Deployment Guide](docs/deployment.md)**.
 - **58 pytest tests** (`test/`) — auth, collection CRUD/merge/split,
   search, security headers, rate limits — each on a fresh temporary database
   with external scraping neutralized.
-- **Playwright smoke test** (`test/smoke_test.py`) — 37 end-to-end checks of
+- **Playwright smoke test** (`test/smoke_test.py`) — 48 end-to-end checks of
   the real UI (fixes, pagination, accessibility, i18n, console hygiene).
 
 ```powershell

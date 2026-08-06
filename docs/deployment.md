@@ -74,15 +74,15 @@ gitignored.
 
 ### Optional: seed data (local helper)
 
-`seed_test_data.py` is a **local-only development helper** (gitignored — it is
-not part of a fresh clone). If present, it seeds:
+`seed_test_data.py` is a **development helper** that ships with the repo. It
+seeds:
 
 - Users `test@trackercg.dev` / `TestPass123` and `second@trackercg.dev` /
   `TestPass123`;
 - 17 unique cards across MTG, Pokémon, Yu-Gi-Oh!, Riftbound;
 - 30 collection items for the main user (page 1 = 20, page 2 = 10).
 
-Run it (idempotent — re-running wipes only its own rows):
+Run it (deterministic — re-running wipes ALL tables before reseeding):
 
 ```bash
 venv\Scripts\python.exe seed_test_data.py

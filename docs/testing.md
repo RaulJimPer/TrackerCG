@@ -3,7 +3,7 @@
 Testing strategy, how to run the suite, and what exactly is covered.
 
 **Status:** Backend verified. Suite: **58 pytest tests** + **Playwright smoke
-test (37 checks)** — all green. Migrations `0001`→`0004` applied.
+test (48 checks)** — all green. Migrations `0001`→`0004` applied.
 
 ---
 
@@ -21,7 +21,8 @@ Test directory rules:
 - Tests never touch the development database (`trackercg.db`); each test uses
   its own temporary SQLite file.
 - `seed_test_data.py` is a data helper for development/manual testing, **not**
-  a test — it is gitignored and lives at the repo root.
+  a pytest test — it lives at the repo root and is committed; it wipes all
+  tables before reseeding.
 
 ## 2. How to run
 
@@ -72,7 +73,7 @@ venv\Scripts\python.exe test\smoke_test.py
 
 ### Prerequisites
 
-1. Seed the database (reseed is idempotent):
+1. Seed the database (deterministic — wipes all tables before reseeding):
 
    ```powershell
    venv\Scripts\python.exe seed_test_data.py
@@ -90,29 +91,38 @@ venv\Scripts\python.exe test\smoke_test.py
    venv\Scripts\python.exe test\smoke_test.py
    ```
 
-### What it verifies (37 checks)
+### What it verifies (48 checks)
 
 1. Index loads with the login button.
-2. **Accessibility**: modals expose `role="dialog"` + `aria-modal`, focus
+2. **Anonymous state** — dashboard and search show only the sign-in/register
+   disclaimers; the portfolio hero, pills, and grids stay hidden.
+3. **Accessibility** — modals expose `role="dialog"` + `aria-modal`, focus
    moves into the modal, and the focus trap wraps correctly.
-3. **fix1** — Login errors render as a readable message inside the modal,
+4. **fix1** — Login errors render as a readable message inside the modal,
    without overflowing it.
-4. **fix2** — Registration errors are human-readable (duplicate email, weak
+5. **fix2** — Registration errors are human-readable (duplicate email, weak
    password), never raw error keys.
-5. Login works; portfolio loads.
-6. **fix4** — Collection pills = All + 4 games; the active game stays
+6. **Fresh register → login → logout (regression)** — a brand-new account
+   registers, the login modal auto-opens pre-filled, and logging in leaves
+   **no lingering modal open** (the unclickable-logout fix); the first logout
+   works without a page reload.
+7. Login works; portfolio and hero load.
+8. **fix4** — Collection pills = All + 4 games; the active game stays
    highlighted; other pills persist; "All" restores the grid.
-7. **Pagination** — page 1 = 20 cards, page 2 = 10, back to page 1.
-8. **fix6** — Details modal shows name and market price; `Esc` closes it.
-9. **fix7** — Split button visible on a card with quantity > 1; selecting a
-   different condition ("Damaged") and splitting shows the success toast.
-10. **fix3** — Logout confirmation: cancel keeps the session; confirm signs
-    out, resets the portfolio to `$0.00`, and shows the toast.
-11. **fix5** — Search pills highlight the active game; the four enum games are
-    offered as filters.
-12. **fix8** — Local search results appear immediately (< 3 s), Riftbound cards
+9. **Pagination** — page 2 is offered, page 1 = 20 cards, page 2 = 10, back
+   to page 1.
+10. **fix6** — Details modal shows name and market price; `Esc` closes it.
+11. **fix7** — Split button visible on a card with quantity > 1; selecting a
+    different condition ("Damaged") and splitting shows the success toast.
+12. **fix3** — Logout confirmation: cancel keeps the session; confirm signs
+    out — including a **second confirm in the same page session** (regression
+    for the re-enabled confirm button) — resets the portfolio to `$0.00`, and
+    shows the toast.
+13. **fix5** — The search bar renders after login; search pills highlight the
+    active game; the four enum games are offered as filters.
+14. **fix8** — Local search results appear immediately (< 3 s), Riftbound cards
     are found locally, and the "In collection" badge renders for owned cards.
-13. **i18n** — Switching to Spanish and back keeps pills and modals intact.
-14. **Console hygiene** — zero JavaScript errors. Expected network noise is
+15. **i18n** — Switching to Spanish and back keeps pills and modals intact.
+16. **Console hygiene** — zero JavaScript errors. Expected network noise is
     filtered (intentional 4xx from the flow and `ERR_NAME_NOT_RESOLVED` from
     unreachable CDNs); real JS errors via `pageerror` always fail the test.

@@ -23,9 +23,6 @@ env/
 .DS_Store
 Thumbs.db
 
-#Testing files
-seed_test_data.py
-
 # OpenCode AI Configuration
 .opencode/
 skills-lock.json
