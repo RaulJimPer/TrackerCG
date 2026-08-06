@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import math
 from decimal import Decimal
 
@@ -21,7 +20,7 @@ from src.schemas.collection import (
     PortfolioValueResponse,
 )
 from src.schemas.cards import CardResponse
-from src.scraper import SCRAPERS, refresh_stale_prices
+from src.scraper import SCRAPERS, spawn_stale_price_refresh
 
 router = APIRouter(prefix="/api/collection", tags=["collection"])
 
@@ -114,17 +113,25 @@ async def portfolio_value(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_user),
 ):
-    stmt = select(
-        func.coalesce(func.sum(UserCard.quantity * Card.market_price), 0.0),
-        func.coalesce(func.sum(UserCard.quantity), 0),
-        func.count(func.distinct(UserCard.card_id)),
-    ).join(Card, UserCard.card_id == Card.id).where(UserCard.user_id == user.id)
+    # Sum in Python with Decimal: SQLite's SUM of NUMERIC columns is float
+    # arithmetic, which can drift by cents on large portfolios.
+    rows = (
+        await db.execute(
+            select(UserCard.quantity, UserCard.card_id, Card.market_price)
+            .join(Card, UserCard.card_id == Card.id)
+            .where(UserCard.user_id == user.id)
+        )
+    ).all()
 
-    result = await db.execute(stmt)
-    total_value, cards_count, unique_cards = result.one()
+    total_value = sum(
+        (Decimal(quantity) * market_price for quantity, _, market_price in rows),
+        Decimal("0"),
+    ).quantize(Decimal("0.01"))
+    cards_count = sum(quantity for quantity, _, _ in rows)
+    unique_cards = len({card_id for _, card_id, _ in rows})
 
     return PortfolioValueResponse(
-        total_value=Decimal(total_value).quantize(Decimal("0.01")),
+        total_value=total_value,
         cards_count=int(cards_count),
         unique_cards=int(unique_cards),
     )
@@ -220,7 +227,8 @@ async def refresh_collection_prices(
     user: User = Depends(current_user),
 ):
     """Trigger a background market-price refresh of stale cards. Returns
-    immediately (202); actual scraping runs in the background."""
+    immediately (202); actual scraping runs in the background, tracked and
+    single-flight (no duplicate runs)."""
     games_stmt = (
         select(func.distinct(Card.game))
         .select_from(UserCard)
@@ -231,8 +239,12 @@ async def refresh_collection_prices(
     game_values = [g for g in result.scalars().all() if g is not None]
     games = [g for g in game_values if Game(g) in SCRAPERS]
 
-    asyncio.ensure_future(refresh_stale_prices())
-    return {"status": "scheduled", "games": games}
+    spawned = spawn_stale_price_refresh() if games else False
+    return {
+        "status": "scheduled",
+        "games": games,
+        "already_running": bool(games) and not spawned,
+    }
 
 
 @router.post("/{item_id}/split", response_model=CollectionItemResponse, status_code=201)
@@ -292,9 +304,9 @@ async def split_collection_item(
 
     for _attempt in range(2):
         try:
+            # Only the quantity moves; the source item's purchase price is
+            # preserved (splitting off a copy must not alter the source row).
             uc.quantity -= body.quantity
-            if body.purchase_price is not None:
-                uc.purchase_price = body.purchase_price
             target = (await db.execute(variant_stmt)).scalar_one_or_none()
             if target is not None:
                 target.quantity += body.quantity

@@ -11,22 +11,7 @@
     MTG: "Magic: The Gathering",
     POKEMON: "Pokémon",
     YUGIOH: "Yu-Gi-Oh!",
-    LORCANA: "Lorcana",
-    ONEPIECE: "One Piece",
-    DIGIMON: "Digimon",
-    FLESH_AND_BLOOD: "Flesh and Blood",
-    VANGUARD: "Cardfight!! Vanguard",
-    WEISS_SCHWARZ: "Weiss Schwarz",
-    DBS: "Dragon Ball Super",
-    FF_TCG: "Final Fantasy TCG",
-    FORCE_OF_WILL: "Force of Will",
-    L5R: "Legend of the Five Rings",
-    BATTLE_SPIRITS: "Battle Spirits",
-    GUNDAM: "Gundam TCG",
-    STAR_WARS: "Star Wars Unlimited",
-    KEYFORGE: "KeyForge",
-    SORCERY: "Sorcery: Contested Realm",
-    OTHER: "Other",
+    RIFTBOUND: "Riftbound",
   };
 
   const CONDITIONS = ["Mint", "Near Mint", "Lightly Played", "Played", "Damaged"];
@@ -48,6 +33,8 @@
       search_hint: "Searching external sources... this may take a few seconds.",
       search_no_results: "No cards found. Try a different search.",
       all_games: "All",
+      auth_prompt_title: "Sign in to access your collection",
+      auth_prompt_hint: "Create an account or sign in to track your TCG cards and their market value.",
       login: "Sign in",
       register: "Register",
       logout: "Log out",
@@ -94,6 +81,11 @@
       toast_error: "Something went wrong. Please try again.",
       card_count: "{{count}} cards",
       game_filter: "Game",
+      condition_mint: "Mint",
+      condition_near_mint: "Near Mint",
+      condition_lightly_played: "Lightly Played",
+      condition_played: "Played",
+      condition_damaged: "Damaged",
       err_bad_credentials: "Incorrect email or password.",
       err_email_exists: "An account with this email already exists.",
       err_invalid_password: "Password must be at least 8 characters with an uppercase letter and a number.",
@@ -125,6 +117,8 @@
       search_hint: "Buscando en fuentes externas... puede tardar unos segundos.",
       search_no_results: "No se encontraron cartas. Prueba con otra búsqueda.",
       all_games: "Todos",
+      auth_prompt_title: "Inicia sesión para acceder a tu colección",
+      auth_prompt_hint: "Crea una cuenta o inicia sesión para gestionar tus cartas TCG y su valor de mercado.",
       login: "Iniciar sesión",
       register: "Registrarse",
       logout: "Cerrar sesión",
@@ -171,6 +165,11 @@
       toast_error: "Algo salió mal. Inténtalo de nuevo.",
       card_count: "{{count}} cartas",
       game_filter: "Juego",
+      condition_mint: "Excelente",
+      condition_near_mint: "Cuidada",
+      condition_lightly_played: "Buen estado",
+      condition_played: "Jugada",
+      condition_damaged: "Dañada",
       err_bad_credentials: "Correo o contraseña incorrectos.",
       err_email_exists: "Ya existe una cuenta con este correo.",
       err_invalid_password: "La contraseña debe tener al menos 8 caracteres, una mayúscula y un número.",
@@ -221,6 +220,12 @@
 
   function gameLabel(game) {
     return GAME_LABELS[game] || game || t("all_games");
+  }
+
+  function conditionLabel(condition) {
+    const key = `condition_${String(condition).toLowerCase().replace(/[^a-z]+/g, "_")}`;
+    const label = t(key);
+    return label === key ? condition : label;
   }
 
   function formatMoney(value) {
@@ -370,8 +375,10 @@
     const modal = $(`#${id}`);
     if (!modal) return;
     modal.classList.remove("modal-visible");
+    // Remove the display flag synchronously so a closing modal can never stay
+    // as a full-screen overlay intercepting clicks (e.g. right after login).
+    modal.classList.remove("modal-open");
     setTimeout(() => {
-      modal.classList.remove("modal-open");
       if (!$$(".modal-open").length) {
         document.body.classList.remove("modal-open-body");
         if (state.lastFocused && state.lastFocused.focus) state.lastFocused.focus();
@@ -382,8 +389,9 @@
   function closeAllModals() {
     $$(".modal-open").forEach((m) => {
       m.classList.remove("modal-visible");
-      setTimeout(() => m.classList.remove("modal-open"), 150);
+      m.classList.remove("modal-open");
     });
+    document.body.classList.remove("modal-open-body");
   }
 
   function showError(containerId, msg) {
@@ -406,7 +414,12 @@
     $(`#view-${view}`).hidden = false;
     $$(".nav-btn").forEach((btn) => btn.classList.toggle("active", btn.dataset.view === view));
     if (view === "dashboard" && state.user) loadCollection(1);
-    if (view === "search" && state.user) $("#search-input").focus();
+    if (view === "search" && state.user) {
+      // resetUI() clears the filters on logout; re-render them when entering
+      // the search view so they survive a logout -> login cycle.
+      renderSearchFilters();
+      $("#search-input").focus();
+    }
   }
 
   /* ---------------- Skeletons ---------------- */
@@ -463,7 +476,7 @@
         <div class="mt-auto pt-2">
           <div class="flex items-baseline justify-between">
             <span class="price price-gain text-lg">${formatMoney(item.total_value)}</span>
-            ${pnl !== null ? pnlPill(pnl) : `<span class="text-xs text-slate-500">${escapeHtml(item.condition)}</span>`}
+            ${pnl !== null ? pnlPill(pnl) : `<span class="text-xs text-slate-500">${escapeHtml(conditionLabel(item.condition))}</span>`}
           </div>
           <div class="flex items-center justify-between mt-1 text-xs text-slate-500">
             <span>${escapeHtml(t("market"))}: <span class="price text-slate-300" data-price data-value="${escapeHtml(card.market_price)}">${priceHtml}</span></span>
@@ -761,6 +774,30 @@
       user.classList.remove("flex");
       $("#user-email").textContent = "";
     }
+    renderViewAuthState();
+  }
+
+  function renderViewAuthState() {
+    const authed = state.user !== null;
+    // Dashboard: the portfolio hero, pills and grid belong to authenticated
+    // users; anonymous users only see the sign-in/register disclaimer.
+    $("#portfolio-hero").classList.toggle("hidden", !authed);
+    $("#collection-filters").classList.toggle("hidden", !authed);
+    $("#collection-auth-prompt").classList.toggle("hidden", authed);
+    // Search: without a session the search bar and its results are disabled,
+    // replaced by the same disclaimer.
+    $("#search-bar-block").classList.toggle("hidden", !authed);
+    $("#search-auth-prompt").classList.toggle("hidden", authed);
+    if (!authed) {
+      // Never leave collection/search content visible to anonymous users.
+      $("#collection-grid").innerHTML = "";
+      $("#collection-empty").classList.add("hidden");
+      $("#collection-pagination").classList.add("hidden");
+      $("#search-results").innerHTML = "";
+      $("#search-empty").classList.add("hidden");
+      $("#search-pagination").classList.add("hidden");
+      $("#search-hint").classList.add("hidden");
+    }
   }
 
   async function handleLogin(e) {
@@ -819,7 +856,22 @@
   }
 
   function handleLogout() {
+    // confirmLogout disables the button for the duration of the request but
+    // never re-enables it; reset it every time the modal is opened.
+    $("#btn-logout-confirm").disabled = false;
     openModal("modal-logout");
+  }
+
+  function resetUI() {
+    $("#collection-filters").innerHTML = "";
+    $("#search-filters").innerHTML = "";
+    $("#collection-pagination").classList.add("hidden");
+    $("#search-pagination").classList.add("hidden");
+    $("#search-input").value = "";
+    $("#search-hint").classList.add("hidden");
+    $("#collection-grid").innerHTML = "";
+    $("#search-results").innerHTML = "";
+    showEmpty($("#collection-empty"));
   }
 
   async function confirmLogout() {
@@ -831,11 +883,12 @@
       /* noop */
     }
     state.user = null;
-    applyAuthUI();
     state.collection = { game: null, page: 1, items: [], total: 0, pages: 0, inFlight: false, games: [] };
     state.search = { query: "", game: null, page: 1, items: [], total: 0, pages: 0, inFlight: false, timer: null };
-    $("#collection-grid").innerHTML = "";
-    $("#search-results").innerHTML = "";
+    resetUI();
+    // Apply the auth UI after resetUI so the anonymous disclaimer replaces the
+    // just-cleared collection/search content instead of stacking on it.
+    applyAuthUI();
     $("#portfolio-total").textContent = "$0.00";
     $("#portfolio-cards").textContent = "0";
     $("#portfolio-unique").textContent = "0";
@@ -998,7 +1051,7 @@
       img.style.display = "none";
     }
     $("#details-quantity").textContent = `×${item.quantity}`;
-    $("#details-condition").textContent = item.condition;
+    $("#details-condition").textContent = conditionLabel(item.condition);
     $("#details-language").textContent = item.language;
     $("#details-purchase").textContent = item.purchase_price && parseFloat(item.purchase_price) > 0 ? formatMoney(item.purchase_price) : "—";
     $("#details-market").textContent = formatMoney(card.market_price);
@@ -1119,6 +1172,13 @@
     });
     $("#lang-label").textContent = state.lang === "es" ? "EN" : "ES";
     $$(".nav-btn").forEach((btn) => (btn.textContent = t(`nav_${btn.dataset.view}`)));
+    $$("#add-condition, #edit-condition").forEach((sel) => {
+      const previous = sel.value;
+      Array.from(sel.options).forEach((opt) => {
+        opt.textContent = conditionLabel(opt.value);
+      });
+      sel.value = previous;
+    });
     $$(".filter-pill").forEach((pill) => {
       if (pill.classList.contains("active") && pill.textContent === "") {
         pill.textContent = t("all_games");
@@ -1153,6 +1213,11 @@
 
     $("#btn-login").addEventListener("click", () => openModal("modal-login"));
     $("#btn-register").addEventListener("click", () => openModal("modal-register"));
+    // Auth disclaimers (dashboard + search) open the same modals.
+    $("#btn-collection-prompt-login").addEventListener("click", () => openModal("modal-login"));
+    $("#btn-collection-prompt-register").addEventListener("click", () => openModal("modal-register"));
+    $("#btn-search-prompt-login").addEventListener("click", () => openModal("modal-login"));
+    $("#btn-search-prompt-register").addEventListener("click", () => openModal("modal-register"));
     $("#btn-goto-register").addEventListener("click", () => {
       closeModal("modal-login");
       openModal("modal-register");
@@ -1217,6 +1282,8 @@
   function init() {
     bindEvents();
     applyI18n();
+    // Default to the anonymous view state until checkSession() resolves.
+    renderViewAuthState();
     switchView("dashboard");
     renderSearchFilters();
     checkSession();

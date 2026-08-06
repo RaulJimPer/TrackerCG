@@ -19,7 +19,7 @@
       },
     };
   </script>
-  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="/static/css/style.css?v=4" />
 </head>
 <body class="h-full bg-slate-950 text-slate-100 font-sans antialiased">
 
@@ -70,7 +70,7 @@
     <!-- ============ VIEW: DASHBOARD ============ -->
     <section id="view-dashboard" class="view" hidden>
       <!-- Portfolio hero -->
-      <div class="bg-slate-900 rounded-xl p-6 mb-8 border border-slate-700">
+      <div id="portfolio-hero" class="bg-slate-900 rounded-xl p-6 mb-8 border border-slate-700">
         <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
           <div>
             <p class="text-slate-400 text-sm mb-1" data-i18n="portfolio_value"></p>
@@ -86,6 +86,21 @@
               <p id="portfolio-unique" class="text-2xl font-bold text-white tabular-nums mt-1">0</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Auth prompt (anonymous users) -->
+      <div id="collection-auth-prompt" class="hidden flex flex-col items-center justify-center py-20 text-center">
+        <div class="w-20 h-20 rounded-2xl bg-slate-800 flex items-center justify-center mb-6">
+          <svg class="w-10 h-10 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </div>
+        <p class="text-lg text-slate-300 font-medium mb-1" data-i18n="auth_prompt_title"></p>
+        <p class="text-sm text-slate-400 mb-6 max-w-md" data-i18n="auth_prompt_hint"></p>
+        <div class="flex items-center justify-center gap-3">
+          <button id="btn-collection-prompt-register" class="px-5 py-2.5 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-slate-900 transition-all duration-200" data-i18n="register"></button>
+          <button id="btn-collection-prompt-login" class="px-5 py-2.5 rounded-lg text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all duration-200" data-i18n="login"></button>
         </div>
       </div>
 
@@ -113,7 +128,7 @@
 
     <!-- ============ VIEW: SEARCH ============ -->
     <section id="view-search" class="view" hidden>
-      <div class="mb-8">
+      <div id="search-bar-block" class="mb-8">
         <label for="search-input" class="sr-only">Search cards</label>
         <div class="relative">
           <svg class="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -130,6 +145,21 @@
         </div>
         <div id="search-filters" class="flex items-center gap-2 overflow-x-auto pb-2 mt-4 scrollbar-thin" role="group" aria-label="Filter search by game"></div>
         <p id="search-hint" class="text-xs text-slate-500 mt-2 hidden"></p>
+      </div>
+
+      <!-- Auth prompt (anonymous users) -->
+      <div id="search-auth-prompt" class="hidden flex flex-col items-center justify-center py-20 text-center">
+        <div class="w-20 h-20 rounded-2xl bg-slate-800 flex items-center justify-center mb-6">
+          <svg class="w-10 h-10 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </div>
+        <p class="text-lg text-slate-300 font-medium mb-1" data-i18n="auth_prompt_title"></p>
+        <p class="text-sm text-slate-400 mb-6 max-w-md" data-i18n="auth_prompt_hint"></p>
+        <div class="flex items-center justify-center gap-3">
+          <button id="btn-search-prompt-register" class="px-5 py-2.5 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-slate-900 transition-all duration-200" data-i18n="register"></button>
+          <button id="btn-search-prompt-login" class="px-5 py-2.5 rounded-lg text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all duration-200" data-i18n="login"></button>
+        </div>
       </div>
 
       <!-- Results -->
@@ -381,6 +411,6 @@
   <!-- ============ TOASTS ============ -->
   <div id="toast-container" class="fixed bottom-4 right-4 z-[60] flex flex-col gap-2 items-end" aria-live="polite"></div>
 
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v=4"></script>
 </body>
 </html>

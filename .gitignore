@@ -5,7 +5,6 @@ __pycache__/
 venv/
 env/
 .env
-.env.*
 
 # Database
 *.sqlite
@@ -23,9 +22,6 @@ env/
 .idea/
 .DS_Store
 Thumbs.db
-
-#Testing files
-seed_test_data.py
 
 # OpenCode AI Configuration
 .opencode/

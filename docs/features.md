@@ -42,7 +42,7 @@ After login the user lands on their private portfolio view.
   saved card with image, name, game badge, quantity, condition, and per-item
   total value.
 - **Game filter pills**: filter the collection by game (MTG, Pokémon,
-  Yu-Gi-Oh!, Lorcana, One Piece, Digimon, ...). Pills are loaded from
+  Yu-Gi-Oh!, Riftbound). Pills are loaded from
   `GET /api/collection/games` and never rebuilt from a filtered page, so
   filters never "lose" games.
 - **Pagination**: 20 items per page with page controls.
@@ -84,22 +84,30 @@ A dedicated search tab independent of the user's collection.
 
 ## 4. Market Data & Price Automation
 
-- **Three scrapers**, each isolated under `src/scrapers/`:
+- **Four scrapers**, each isolated under `src/scrapers/`:
 
   | Game | Source | Method |
   |------|--------|--------|
-  | Magic: The Gathering | Scryfall API | `httpx` (JSON) |
-  | Pokémon | Pokémon TCG API (pokemontcg.io) | `httpx` (JSON, optional API key) |
-  | Yu-Gi-Oh! | TCGplayer product pages | Playwright (JS-rendered HTML) |
+  | Magic: The Gathering | Scryfall API | `httpx` (JSON, no key) |
+  | Pokémon | TCGGO (tcggo.com) | `httpx` + BeautifulSoup (public HTML, no key) |
+  | Yu-Gi-Oh! | YGOPRODeck API | `httpx` (JSON, no key) |
+  | Riftbound | TCGGO (tcggo.com) | `httpx` + BeautifulSoup (public HTML, no key) |
 
 - **Price TTL**: cards older than 24 hours are considered stale.
 - **Single-flight**: concurrent identical searches share one background
   request instead of duplicating work.
 - **Background refresh**: when a query has only stale local matches, an
   external refresh is spawned in the background (never blocking the response).
+- **Collection refresh** (`POST /api/collection/refresh-prices`): returns
+  `202` immediately and spawns a **tracked** background refresh of stale card
+  prices. It is **single-flight**: if a refresh is already running (periodic
+  task or a previous request), the request reports `already_running: true`
+  and no duplicate task is created. Only runs when the user's collection
+  contains games with a scraper.
 - **Periodic refresh**: every 24 hours the app refreshes stale card prices for
   cards whose game has a scraper (`refresh_stale_prices`, one session per card,
-  1–3 s random delay between requests).
+  1–3 s random delay between requests). The same single-flight guard prevents
+  it from colliding with a user-triggered collection refresh.
 - **Per-card refresh**: `POST /api/cards/{id}/refresh-price` re-fetches a
   single card's market price; failures log and return the last known price.
 - **Politeness**: every external request includes a random 1–3 s delay and
@@ -109,9 +117,7 @@ A dedicated search tab independent of the user's collection.
 
 ## 5. Data Model
 
-- **Games** (`Game` enum): MTG, POKEMON, YUGIOH, LORCANA, ONEPIECE, DIGIMON,
-  FLESH_AND_BLOOD, VANGUARD, WEISS_SCHWARZ, DBS, FF_TCG, FORCE_OF_WILL, L5R,
-  BATTLE_SPIRITS, GUNDAM, STAR_WARS, KEYFORGE, SORCERY, OTHER.
+- **Games** (`Game` enum): MTG, POKEMON, YUGIOH, RIFTBOUND.
 - **Conditions** (`Condition` enum): Mint, Near Mint, Lightly Played, Played,
   Damaged.
 - **Card**: catalog entry (game, name, set, collector number, rarity, image,
@@ -122,7 +128,9 @@ A dedicated search tab independent of the user's collection.
   (`uq_usercard_user_card_variant`) guarantees one row per variant, enforced
   with atomic merge/409 handling in the API.
 - **Money**: `Decimal` everywhere, stored as `NUMERIC(10,2)`, serialized by
-  Pydantic v2 as strings in JSON responses.
+  Pydantic v2 as strings in JSON responses. Portfolio aggregation (total value)
+  is summed in Python with `Decimal` — never with SQL `SUM`, whose float
+  arithmetic on SQLite can drift by cents.
 - **Time**: aware UTC datetimes (`UTCDateTime` TypeDecorator), serialized as
   ISO-8601 with a `Z` suffix.
 

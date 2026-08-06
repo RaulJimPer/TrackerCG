@@ -17,8 +17,10 @@ async def test_search_rate_limit_429(client):
         statuses.append(r.status_code)
 
     assert statuses.count(429) >= 1
-    # The final responses must carry the slowapi rate-limit headers.
+    # The final responses must carry the slowapi rate-limit headers; the
+    # custom 429 handler reports the configured limit as the exact amount.
     assert "x-ratelimit-limit" in r.headers
+    assert r.headers.get("x-ratelimit-limit") == str(SEARCH_LIMIT)
 
 
 async def test_headers_enabled(client):

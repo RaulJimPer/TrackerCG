@@ -32,17 +32,12 @@ pip install -r requirements.txt
 For development and testing, also install:
 
 ```bash
-pip install -r requirements-dev.txt   # pytest, pytest-asyncio, ruff
+pip install -r requirements-dev.txt   # pytest, pytest-asyncio, ruff, Playwright
 ```
 
-Install the Playwright browser binary used by the Yu-Gi-Oh! scraper:
-
-```bash
-playwright install chromium
-```
-
-> The Pokémon TCG API works without a key but is heavily rate-limited; set
-> `POKEMON_TCG_API_KEY` in the environment for reliable scraping.
+> **No API keys are required.** All market data comes from public sources:
+> Scryfall (MTG), YGOPRODeck (Yu-Gi-Oh!), and TCGGO's public card pages
+> (Pokémon and Riftbound), scraped with `httpx` + BeautifulSoup.
 
 ## 3. Configuration
 
@@ -57,7 +52,6 @@ cp .env.example .env
 | `SECRET_KEY` | Generate one: `python -c "import secrets; print(secrets.token_urlsafe(48))"`. **Required when `DEBUG=false`.** |
 | `DEBUG` | `true` during development; **must be `false` in production**. |
 | `COOKIE_SECURE` | `true` when serving over HTTPS (sets the `Secure` flag on the session cookie). |
-| `POKEMON_TCG_API_KEY` | Optional; recommended in production. |
 | `RATE_LIMIT_ENABLED` | Global rate-limit switch (default `true`). |
 | `TRUSTED_PROXY` | Set `true` **only** behind a reverse proxy that overwrites `X-Forwarded-For`. |
 | `JWT_LIFETIME_SECONDS` | Session length in seconds (default `3600`). |
@@ -80,15 +74,15 @@ gitignored.
 
 ### Optional: seed data (local helper)
 
-`seed_test_data.py` is a **local-only development helper** (gitignored — it is
-not part of a fresh clone). If present, it seeds:
+`seed_test_data.py` is a **development helper** that ships with the repo. It
+seeds:
 
 - Users `test@trackercg.dev` / `TestPass123` and `second@trackercg.dev` /
   `TestPass123`;
-- 17 unique cards across MTG, Pokémon, Yu-Gi-Oh!, Lorcana, One Piece, Digimon;
+- 17 unique cards across MTG, Pokémon, Yu-Gi-Oh!, Riftbound;
 - 30 collection items for the main user (page 1 = 20, page 2 = 10).
 
-Run it (idempotent — re-running wipes only its own rows):
+Run it (deterministic — re-running wipes ALL tables before reseeding):
 
 ```bash
 venv\Scripts\python.exe seed_test_data.py
@@ -106,8 +100,7 @@ or, on Windows without relying on PATH:
 venv\Scripts\python.exe -m uvicorn src.main:app --reload
 ```
 
-Open <http://127.0.0.1:8000> in your browser. The API documentation is
-available at <http://127.0.0.1:8000/docs>.
+Open <http://127.0.0.1:8000> in your browser.
 
 ## 6. Using the application
 
@@ -130,8 +123,8 @@ available at <http://127.0.0.1:8000/docs>.
 
 ## 7. Production notes
 
-- Set `DEBUG=false`; TrackerCG will then **require** `SECRET_KEY` and
-  `POKEMON_TCG_API_KEY` at startup (fail-fast validation).
+- Set `DEBUG=false`; TrackerCG will then **require** `SECRET_KEY` at startup
+  (fail-fast validation).
 - Serve over HTTPS and set `COOKIE_SECURE=true`.
 - `Strict-Transport-Security` (HSTS) is added automatically when
   `DEBUG=false`.
@@ -146,7 +139,7 @@ available at <http://127.0.0.1:8000/docs>.
 | Symptom | Likely fix |
 |---------|-----------|
 | `ModuleNotFoundError` on startup | Activate the venv / reinstall `requirements.txt`. |
-| Yu-Gi-Oh! searches return nothing | Run `playwright install chromium`. |
-| Pokémon searches fail / rate-limited | Set `POKEMON_TCG_API_KEY`. |
+| Yu-Gi-Oh! searches return nothing | Temporary YGOPRODeck outage; check your network and retry later. |
+| Pokémon / Riftbound searches return nothing | Temporary TCGGO outage or layout change; check your network and retry later. The app degrades to local results. |
 | Port already in use | Change the port: `uvicorn src.main:app --port 8001`. |
-| `SECRET_KEY` / `POKEMON_TCG_API_KEY` error at startup | With `DEBUG=false` both are mandatory; set them in `.env`. |
+| `SECRET_KEY` error at startup | With `DEBUG=false` `SECRET_KEY` is mandatory; set it in `.env`. |

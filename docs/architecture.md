@@ -17,7 +17,7 @@ trackercg/
 ├── alembic/                  # Database migrations
 │   ├── env.py                # Alembic environment (async engine, FK handling)
 │   ├── script.py.mako        # Migration template
-│   └── versions/             # 0001_initial_schema, 0002_money_numeric, 0003_usercard_unique_index
+│   └── versions/             # 0001_initial_schema, 0002_money_numeric, 0003_usercard_unique_index, 0004_trim_game_enum
 ├── docs/                     # Project documentation (this folder)
 │   ├── features.md
 │   ├── architecture.md
@@ -47,9 +47,11 @@ trackercg/
 │   └── scrapers/
 │       ├── __init__.py
 │       ├── base.py           # ScraperBase ABC, CardData dataclass, UA rotation, random delays
+│       ├── tcggo.py          # TcggoScraper base — TCGGO public HTML (search + card pages)
 │       ├── mtg.py            # Scryfall API (httpx)
-│       ├── pokemon.py        # Pokémon TCG API (httpx, optional API key)
-│       └── yugioh.py         # TCGplayer (Playwright — the only Playwright consumer)
+│       ├── pokemon.py        # TCGGO scraping (TcggoScraper, game_slug="pokemon")
+│       ├── yugioh.py         # YGOPRODeck API (httpx)
+│       └── riftbound.py      # TCGGO scraping (TcggoScraper, game_slug="riftbound")
 ├── static/
 │   ├── css/style.css         # Custom styles on top of Tailwind (design tokens, components)
 │   └── js/app.js             # SPA: state, i18n, API helper, rendering, modals
@@ -80,7 +82,7 @@ HTTP request
    → SlowAPIMiddleware (rate limiting)
    → Router (routes/)                      # FastAPI endpoints, auth dependency
    → Orchestrator (scraper.py)             # search/refresh logic, single-flight, TTL
-   → Scrapers (scrapers/)                  # httpx / Playwright against external sources
+   → Scrapers (scrapers/)                  # httpx against external sources
    → SQLModel models (models.py)           # User, Card, UserCard
    → SQLite via async engine (database.py) # aiosqlite, PRAGMA foreign_keys=ON
 ```
@@ -91,11 +93,16 @@ HTTP request
   `RateLimitExceeded` handler, and defines the `/health` and `/` routes.
 - **Lifespan**: on startup it creates the tables if missing
   (`create_db_and_tables`), starts a 24-hour periodic stale-price refresh task,
-  and on shutdown cancels that task, closes the scraper clients (including the
-  shared Playwright browser), and disposes the async engine.
+  and on shutdown cancels that task, closes the scraper clients, and disposes
+  the async engine.
 - **Routes never scrape directly** — they call the orchestrator
   (`search_cards`, `refresh_card_price`, `refresh_stale_prices`) which owns
   caching, concurrency, and degradation.
+- **Background refreshes are tracked and single-flight**: the collection
+  refresh route and the periodic task both go through
+  `spawn_stale_price_refresh`/`refresh_stale_prices`, which keep the running
+  task in a module-level set (no garbage-collected fire-and-forget tasks) and
+  deduplicate concurrent runs.
 - **Each game's background upsert runs in its own `AsyncSession`** — sessions
   are never shared across concurrent `asyncio.gather` tasks.
 
@@ -103,7 +110,7 @@ HTTP request
 
 `static/js/app.js` is a single IIFE with no framework:
 
-- **Constants**: `GAME_LABELS` (19 games), `CONDITIONS` (5), `PAGE_SIZE`.
+- **Constants**: `GAME_LABELS` (4 games), `CONDITIONS` (5), `PAGE_SIZE`.
 - **i18n**: an `I18N` dictionary (`en`/`es`), selected from the browser locale,
   toggled at runtime, applied via `applyI18n()`.
 - **State**: a `state` object holds auth, current view, collection
@@ -137,7 +144,10 @@ provides the design tokens and component styles on top of the Tailwind CDN.
     reconcile against an existing database;
   - `0002` — money columns as `NUMERIC(10,2)` and partial unique index
     recreation;
-  - `0003` — unique variant index on `usercard` with a dedupe step.
+  - `0003` — unique variant index on `usercard` with a dedupe step;
+  - `0004` — trim the `Game` enum to the four supported games and delete
+    catalog/collection rows for removed games (FKs off during the migration
+    window).
 - **`alembic/env.py`** runs migrations on an **`AUTOCOMMIT`** connection and
   disables foreign keys for the migration window. This is required because
   SQLite reports `transactional_ddl=False`, and a stray open transaction would
@@ -146,10 +156,12 @@ provides the design tokens and component styles on top of the Tailwind CDN.
 ## 5. Conventions
 
 - **Money** is `Decimal`, stored as `NUMERIC(10,2)`, serialized by Pydantic v2
-  as **strings** (never floats).
+  as **strings** (never floats). Portfolio totals are aggregated in Python with
+  `Decimal` (`/api/collection/value`) instead of SQL `SUM` to avoid SQLite
+  float drift.
 - **Time** is aware UTC everywhere (`UTCDateTime`), serialized as ISO-8601
   with a `Z` suffix.
 - **Async-first**: every route and scraping function is `async def`.
 - **No Node.js / NPM / bundlers**; the frontend is served as static files.
-- **Playwright is confined to `src/scrapers/yugioh.py`** (shared browser,
-  serialized page access through a per-loop lock).
+- **Playwright is a dev/test-only dependency** (the smoke test); runtime
+  scraping is pure `httpx`.

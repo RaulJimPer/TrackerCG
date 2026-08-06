@@ -62,7 +62,7 @@ def main() -> int:
             # Expected network-level failures are ignored:
             #  - the flow intentionally triggers bad logins/registers (400) and
             #    starts unauthenticated (/users/me returns 401)
-            #  - card images point at external CDNs (scryfall, pokemontcg, ...)
+            #  - card images point at external CDNs (scryfall, ...)
             #    that may be unreachable in a sandboxed network; the browser
             #    logs those as ERR_NAME_NOT_RESOLVED resource failures
             # JS exceptions surface separately via pageerror and always fail.
@@ -75,6 +75,17 @@ def main() -> int:
 
         page.goto(BASE_URL, wait_until="load")
         check("index loads with login button", page.locator("#btn-login").count() == 1)
+
+        # ---------------- Anonymous view state ----------------
+        # Without a session the dashboard shows only the auth disclaimer:
+        # no portfolio hero, no pills, no grid.
+        check("anon: dashboard auth prompt visible", page.locator("#collection-auth-prompt:not(.hidden)").count() == 1)
+        check("anon: portfolio hero hidden", page.locator("#portfolio-hero").is_hidden())
+        page.click("#nav-search")
+        check("anon: search auth prompt visible", page.locator("#search-auth-prompt:not(.hidden)").count() == 1)
+        check("anon: search bar hidden", page.locator("#search-bar-block").is_hidden())
+        page.click("#nav-dashboard")
+        check("anon: dashboard prompt still visible", page.locator("#collection-auth-prompt:not(.hidden)").count() == 1)
 
         # ---------------- Fix 1: login error inside the box ----------------
         page.click("#btn-login")
@@ -118,6 +129,32 @@ def main() -> int:
         page.keyboard.press("Escape")
         page.wait_for_timeout(300)
 
+        # ---------------- Register -> login -> logout (fresh account) ----------------
+        # Regression: after registering and logging in, the login modal must not
+        # linger as a full-screen overlay intercepting clicks (the logout button
+        # was unclickable until a page reload). The modal-open flag is removed
+        # synchronously by closeModal, so no modal may be open after login.
+        fresh_email = f"smoke-{int(time.time())}@trackercg.dev"
+        page.click("#btn-register")
+        open_modal(page, "#modal-register")
+        fill_and_submit(page, "#register-email", "#register-password", "#form-register", fresh_email, "FreshPass123")
+        page.wait_for_selector("#modal-login.modal-open", timeout=8000)
+        check("fresh: login modal pre-fills email", page.input_value("#login-email") == fresh_email)
+        fill_and_submit(page, "#login-email", "#login-password", "#form-login", fresh_email, "FreshPass123")
+        page.wait_for_selector("#auth-user:not(.hidden)", timeout=10000)
+        page.wait_for_timeout(400)
+        lingering = page.evaluate(
+            """() => Array.from(document.querySelectorAll('[id^="modal-"]'))
+                .filter(m => m.classList.contains('modal-open'))
+                .map(m => m.id)"""
+        )
+        check("fresh: no lingering modal after login", lingering == [], str(lingering))
+        page.click("#btn-logout")
+        open_modal(page, "#modal-logout")
+        page.click("#btn-logout-confirm")
+        page.wait_for_selector("#auth-anon:not(.hidden)", timeout=10000)
+        check("fresh: logout right after register works", page.query_selector("#auth-user:not(.hidden)") is None)
+
         # ---------------- Login (real) ----------------
         page.click("#btn-login")
         open_modal(page, "#modal-login")
@@ -128,6 +165,7 @@ def main() -> int:
         page.wait_for_selector("#collection-grid .tcg-card", timeout=15000)
         check("login works", True)
         check("portfolio loaded", page.text_content("#portfolio-total") != "$0.00")
+        check("auth: portfolio hero visible after login", page.locator("#portfolio-hero").is_visible())
 
         # ---------------- Fix 4: stable collection pills ----------------
         # Pills are rendered from GET /api/collection/games; wait until the
@@ -135,13 +173,13 @@ def main() -> int:
         page.wait_for_selector("#collection-filters .filter-pill:has-text('Yu-Gi-Oh!')", timeout=10000)
         pills = page.query_selector_all("#collection-filters .filter-pill")
         texts = [p.inner_text() for p in pills]
-        check("fix4: pills = All + 6 games", len(pills) == 7 and "Pokémon" in texts and "All" in texts, str(texts))
+        check("fix4: pills = All + 4 games", len(pills) == 5 and "Pokémon" in texts and "All" in texts, str(texts))
         page.click("#collection-filters .filter-pill:has-text('Pokémon')")
         page.wait_for_timeout(1200)
         active = page.query_selector("#collection-filters .filter-pill.active")
         check("fix4: Pokémon pill active", active is not None and "Pokémon" in active.inner_text())
         remaining = page.query_selector_all("#collection-filters .filter-pill")
-        check("fix4: other pills persist", len(remaining) == 7)
+        check("fix4: other pills persist", len(remaining) == 5)
         page.click("#collection-filters .filter-pill:has-text('All')")
         page.wait_for_selector("#collection-grid .tcg-card:nth-child(20)", timeout=10000)
         check("fix4: All restores grid", page.query_selector("#collection-grid .tcg-card") is not None)
@@ -206,6 +244,9 @@ def main() -> int:
         check("fix3: cancel keeps session", page.query_selector("#auth-user:not(.hidden)") is not None)
         page.click("#btn-logout")
         open_modal(page, "#modal-logout")
+        # Second confirm in the same page session: regression for the logout
+        # confirm button staying disabled after the first use (handleLogout
+        # must re-enable it every time the modal opens).
         page.click("#btn-logout-confirm")
         page.wait_for_selector("#auth-anon:not(.hidden)", timeout=10000)
         check("fix3: portfolio reset to $0.00", page.text_content("#portfolio-total") == "$0.00")
@@ -220,6 +261,7 @@ def main() -> int:
 
         # ---------------- Fix 5: search pills highlighted ----------------
         page.click("#nav-search")
+        check("auth: search bar visible after login", page.locator("#search-bar-block").is_visible())
         page.fill("#search-input", "blue")
         page.wait_for_selector("#search-results .tcg-card", timeout=15000)
         page.click("#search-filters .filter-pill:has-text('Yu-Gi-Oh!')")
@@ -227,7 +269,7 @@ def main() -> int:
         active = page.query_selector("#search-filters .filter-pill.active")
         check("fix5: search pill highlighted", active is not None and "Yu-Gi-Oh!" in active.inner_text())
         search_pills = page.query_selector_all("#search-filters .filter-pill")
-        check("fix5: all enum games offered", len(search_pills) >= 7, str(len(search_pills)))
+        check("fix5: all 4 enum games offered", len(search_pills) == 5, str(len(search_pills)))
 
         # ---------------- Fix 8: immediate local search ----------------
         # Clear the active Yu-Gi-Oh! filter from Fix 5 first, otherwise the
@@ -235,23 +277,23 @@ def main() -> int:
         page.click("#search-filters .filter-pill:has-text('All')")
         page.wait_for_timeout(600)
         t0 = time.time()
-        page.fill("#search-input", "elsa")
-        # Wait for the specific local card (Elsa) rather than any .tcg-card —
-        # the previous search grid already contains .tcg-card elements.
-        page.wait_for_selector("#search-results .tcg-card:has-text('Elsa')", timeout=8000)
+        page.fill("#search-input", "void")
+        # Wait for the specific local card (Void Gate) rather than any
+        # .tcg-card — the previous search grid already contains elements.
+        page.wait_for_selector("#search-results .tcg-card:has-text('Void Gate')", timeout=8000)
         elapsed = time.time() - t0
         check("fix8: local results immediate", elapsed < 3.0, f"{elapsed:.2f}s")
         names = page.text_content("#search-results") or ""
-        check("fix8: Lorcana card found locally", "Elsa" in names, names[:80])
-        # Elsa is in the collection (page 1), so her search card shows the badge.
-        elsa_card = page.query_selector("#search-results .tcg-card:has-text('Elsa, Spirit of Winter')")
-        check("fix8: in-collection badge shown", elsa_card is not None and "In collection" in (elsa_card.inner_text() or ""))
+        check("fix8: Riftbound card found locally", "Void Gate" in names, names[:80])
+        # Void Gate is in the collection (page 1), so her search card shows the badge.
+        void_card = page.query_selector("#search-results .tcg-card:has-text('Void Gate')")
+        check("fix8: in-collection badge shown", void_card is not None and "In collection" in (void_card.inner_text() or ""))
 
         # ---------------- Language switch keeps pills & modals ----------------
         page.click("#btn-lang")
         page.wait_for_timeout(400)
         check("lang: switch to ES", page.text_content("#nav-search") == "Buscar")
-        page.wait_for_selector("#search-filters .filter-pill:has-text('Digimon')", timeout=5000)
+        page.wait_for_selector("#search-filters .filter-pill:has-text('Riftbound')", timeout=5000)
         check("lang: pills still rendered", True)
         page.click("#btn-lang")
         page.wait_for_timeout(400)

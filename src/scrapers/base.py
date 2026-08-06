@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from bs4 import BeautifulSoup
 from httpx import AsyncClient
 
 from src.models import Game
@@ -80,8 +79,3 @@ class ScraperBase(ABC):
 
     async def close(self) -> None:
         await self._client.aclose()
-
-    async def _soup(self, url: str) -> BeautifulSoup:
-        resp = await self._client.get(url)
-        resp.raise_for_status()
-        return BeautifulSoup(resp.text, "html.parser")
